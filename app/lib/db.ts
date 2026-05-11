@@ -8,25 +8,9 @@ import type {
   AgendaRecorrente, Comentario,
 } from '@/lib/store';
 
-// ── LOAD COMPLETO ──────────────────────────
+// ── HELPERS DE MAPEAMENTO ──────────────────
 
-export async function loadFromDB(): Promise<AppState> {
-  const [
-    { data: clientes },
-    { data: reunioes },
-    { data: tarefas },
-    { data: comentarios },
-    { data: agendas },
-    { data: ocorrencias },
-  ] = await Promise.all([
-    supabase.from('clientes').select('*').order('criado_em'),
-    supabase.from('reunioes').select('*').order('criado_em'),
-    supabase.from('tarefas').select('*').order('criado_em'),
-    supabase.from('comentarios').select('*').order('criado_em'),
-    supabase.from('agendas').select('*').order('criado_em'),
-    supabase.from('ocorrencias').select('*'),
-  ]);
-
+function mapState(clientes: any[], reunioes: any[], tarefas: any[], comentarios: any[], agendas: any[], ocorrencias: any[]): AppState {
   const tarefasComComentarios: Tarefa[] = (tarefas || []).map(t => ({
     id:          t.id,
     clienteId:   t.cliente_id,
@@ -63,12 +47,57 @@ export async function loadFromDB(): Promise<AppState> {
   };
 }
 
+// ── LOAD PRÓPRIO (filtrado por RLS) ────────
+
+export async function loadFromDB(): Promise<AppState> {
+  const [
+    { data: clientes },
+    { data: reunioes },
+    { data: tarefas },
+    { data: comentarios },
+    { data: agendas },
+    { data: ocorrencias },
+  ] = await Promise.all([
+    supabase.from('clientes').select('*').order('criado_em'),
+    supabase.from('reunioes').select('*').order('criado_em'),
+    supabase.from('tarefas').select('*').order('criado_em'),
+    supabase.from('comentarios').select('*').order('criado_em'),
+    supabase.from('agendas').select('*').order('criado_em'),
+    supabase.from('ocorrencias').select('*'),
+  ]);
+
+  return mapState(clientes||[], reunioes||[], tarefas||[], comentarios||[], agendas||[], ocorrencias||[]);
+}
+
+// ── LOAD GLOBAL (admin — todos os usuários) ─
+
+export async function loadAllFromDB(): Promise<AppState> {
+  // RLS já permite admin ver tudo — a query é a mesma
+  return loadFromDB();
+}
+
 // ── PERFIL ─────────────────────────────────
 
 export async function upsertPerfil(userId: string, email: string) {
   await supabase.from('perfis').upsert({
     id: userId, email, nome: email.split('@')[0],
   }, { onConflict: 'id' });
+}
+
+export async function loadPerfis() {
+  const { data } = await supabase
+    .from('perfis')
+    .select('*')
+    .order('criado_em');
+  return data || [];
+}
+
+export async function updatePerfilRole(userId: string, role: string) {
+  await supabase.from('perfis').update({ role }).eq('id', userId);
+}
+
+export async function updatePerfilNome(userId: string, nome: string) {
+  await supabase.from('perfis').update({ nome }).eq('id', userId);
 }
 
 // ── CLIENTES ───────────────────────────────
@@ -153,16 +182,8 @@ export async function dbSetOcorrencia(
 // ── SEED DEMO ──────────────────────────────
 
 export async function seedDemoDB(state: AppState, ownerId: string) {
-  for (const c of state.clientes) {
-    await dbAddCliente(c, ownerId);
-  }
-  for (const r of state.reunioes) {
-    await dbAddReuniao(r, ownerId);
-  }
-  for (const a of state.agendas) {
-    await dbAddAgenda(a, ownerId);
-  }
-  for (const t of state.tarefas) {
-    await dbAddTarefa(t, ownerId);
-  }
+  for (const c of state.clientes) await dbAddCliente(c, ownerId);
+  for (const r of state.reunioes)  await dbAddReuniao(r, ownerId);
+  for (const a of state.agendas)   await dbAddAgenda(a, ownerId);
+  for (const t of state.tarefas)   await dbAddTarefa(t, ownerId);
 }

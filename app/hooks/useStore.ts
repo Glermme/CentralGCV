@@ -6,7 +6,7 @@ import {
   loadState, saveState, uid, COLORS, hslToHex, buildDemoState,
 } from '@/lib/store';
 import {
-  loadFromDB, seedDemoDB, upsertPerfil,
+  loadFromDB, loadAllFromDB, seedDemoDB, upsertPerfil,
   dbAddCliente, dbDelCliente,
   dbAddTarefa, dbUpdateTarefaStatus, dbDelTarefa,
   dbAddComentario, dbDelComentario,
@@ -17,22 +17,33 @@ import {
 import { supabase } from '@/lib/supabase';
 
 export function useStore() {
-  const [state,   setState]   = useState<AppState>(() => loadState());
-  const [loading, setLoading] = useState(true);
-  const [userId,  setUserId]  = useState<string | null>(null);
+  const [state,       setState]       = useState<AppState>(() => loadState());
+  const [loading,     setLoading]     = useState(true);
+  const [userId,      setUserId]      = useState<string | null>(null);
+  const [userEmail,   setUserEmail]   = useState('');
+  const [userRole,    setUserRole]    = useState<'admin' | 'analista' | 'viewer'>('analista');
+  const [globalView,  setGlobalView]  = useState(false);
 
-  // Carrega usuário e dados na inicialização
   useEffect(() => {
     async function init() {
       const { data: { session } } = await supabase.auth.getSession();
       const uid_ = session?.user?.id ?? null;
       const email = session?.user?.email ?? '';
       setUserId(uid_);
+      setUserEmail(email);
 
       if (!uid_) { setLoading(false); return; }
 
-      // Garante que o perfil existe
       await upsertPerfil(uid_, email);
+
+      // Busca a role do usuário
+      const { data: perfil } = await supabase
+        .from('perfis')
+        .select('role')
+        .eq('id', uid_)
+        .single();
+      const role = perfil?.role ?? 'analista';
+      setUserRole(role);
 
       try {
         const data = await loadFromDB();
@@ -54,6 +65,21 @@ export function useStore() {
     }
     init();
   }, []);
+
+  // Alterna entre visão própria e global (só admin)
+  const toggleGlobalView = useCallback(async () => {
+    if (userRole !== 'admin') return;
+    const next = !globalView;
+    setGlobalView(next);
+    setLoading(true);
+    try {
+      const data = next ? await loadAllFromDB() : await loadFromDB();
+      setState(data);
+      saveState(data);
+    } finally {
+      setLoading(false);
+    }
+  }, [globalView, userRole]);
 
   const update = useCallback((fn: (draft: AppState) => AppState) => {
     setState(prev => {
@@ -248,7 +274,9 @@ export function useStore() {
   }, []);
 
   return {
-    state, loading, userId,
+    state, loading,
+    userId, userEmail, userRole, globalView,
+    toggleGlobalView,
     getCliente,
     addCliente, delCliente,
     addTarefa, updateTarefaStatus, toggleConcluida, cycleStatus, delTarefa, addTarefasBatch,

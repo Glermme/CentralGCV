@@ -8,19 +8,12 @@ import Clientes   from '@/components/Clientes';
 import Agenda     from '@/components/Agenda';
 import Historico  from '@/components/Historico';
 import Configurar from '@/components/Configurar';
+import Usuarios   from '@/components/Usuarios';
 
 import ModalTarefa  from '@/components/modals/ModalTarefa';
 import ModalReuniao from '@/components/modals/ModalReuniao';
 
-type ViewName = 'dashboard' | 'clientes' | 'agenda' | 'historico' | 'config';
-
-const TABS: { id: ViewName; label: string }[] = [
-  { id: 'dashboard', label: 'Visão Geral' },
-  { id: 'clientes',  label: 'Clientes'    },
-  { id: 'agenda',    label: 'Agenda'      },
-  { id: 'historico', label: 'Histórico'   },
-  { id: 'config',    label: 'Configurar'  },
-];
+type ViewName = 'dashboard' | 'clientes' | 'agenda' | 'historico' | 'usuarios' | 'config';
 
 export default function Home() {
   const store = useStore();
@@ -30,11 +23,23 @@ export default function Home() {
   const [toast,        setToast]        = useState('');
   const [toastVisible, setToastVisible] = useState(false);
 
+  const isAdmin   = store.userRole === 'admin';
+  const isViewer  = store.userRole === 'viewer';
+
   const showToast = useCallback((msg: string) => {
     setToast(msg);
     setToastVisible(true);
     setTimeout(() => setToastVisible(false), 2200);
   }, []);
+
+  const tabs = [
+    { id: 'dashboard' as ViewName, label: 'Visão Geral' },
+    { id: 'clientes'  as ViewName, label: 'Clientes'    },
+    { id: 'agenda'    as ViewName, label: 'Agenda'      },
+    { id: 'historico' as ViewName, label: 'Histórico'   },
+    ...(isAdmin ? [{ id: 'usuarios' as ViewName, label: 'Usuários' }] : []),
+    { id: 'config'    as ViewName, label: 'Configurar'  },
+  ];
 
   return (
     <>
@@ -49,11 +54,32 @@ export default function Home() {
           <div style={{ background: 'var(--dark2)', color: 'rgba(255,255,255,.55)', fontWeight: 600, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', padding: '6px 10px', borderRadius: '0 4px 4px 0', border: '1px solid var(--dark3)', borderLeft: 'none', lineHeight: 1.8 }}>Central GCV</div>
         </div>
 
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={() => setModalReuniao(true)}
-            style={{ background: 'transparent', border: '1.5px solid var(--cyan)', color: 'var(--cyan)', borderRadius: 5, padding: '7px 14px', fontFamily: 'inherit', fontWeight: 700, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer' }}
-          >+ Reunião</button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {/* Alternador de visão — só admin */}
+          {isAdmin && (
+            <button
+              onClick={store.toggleGlobalView}
+              style={{
+                background: store.globalView ? 'var(--cyan)' : 'transparent',
+                border: '1.5px solid var(--cyan)',
+                color: store.globalView ? 'var(--dark)' : 'var(--cyan)',
+                borderRadius: 5, padding: '7px 14px',
+                fontFamily: 'inherit', fontWeight: 700, fontSize: 11,
+                letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
+                transition: 'all .15s',
+              }}
+            >
+              {store.globalView ? '⊞ Global' : '⊞ Global'}
+            </button>
+          )}
+
+          {!isViewer && (
+            <button
+              onClick={() => setModalReuniao(true)}
+              style={{ background: 'transparent', border: '1.5px solid var(--cyan)', color: 'var(--cyan)', borderRadius: 5, padding: '7px 14px', fontFamily: 'inherit', fontWeight: 700, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer' }}
+            >+ Reunião</button>
+          )}
+
           <button
             onClick={store.logout}
             style={{ background: 'transparent', border: '1.5px solid var(--dark3)', color: 'rgba(255,255,255,.4)', borderRadius: 5, padding: '7px 14px', fontFamily: 'inherit', fontWeight: 700, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer' }}
@@ -66,7 +92,7 @@ export default function Home() {
 
       {/* ── TABS ── */}
       <div style={{ background: 'var(--dark)', display: 'flex', padding: '0 20px', overflowX: 'auto', gap: 2, borderBottom: '1px solid var(--dark3)' }}>
-        {TABS.map(tab => (
+        {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setView(tab.id)}
@@ -81,6 +107,14 @@ export default function Home() {
           >{tab.label}</button>
         ))}
       </div>
+
+      {/* ── BANNER VISÃO GLOBAL ── */}
+      {store.globalView && (
+        <div style={{ background: 'var(--cyan)', padding: '6px 20px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontWeight: 800, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--dark)' }}>⊞ Visão Global — todos os usuários</span>
+          <button onClick={store.toggleGlobalView} style={{ marginLeft: 'auto', background: 'none', border: '1px solid var(--dark)', borderRadius: 4, padding: '2px 8px', fontSize: 10, fontWeight: 800, cursor: 'pointer', color: 'var(--dark)', textTransform: 'uppercase' }}>Voltar para minha visão</button>
+        </div>
+      )}
 
       {/* ── LOADING ── */}
       {store.loading && (
@@ -98,12 +132,15 @@ export default function Home() {
           {view === 'clientes'  && <Clientes   store={store} showToast={showToast} />}
           {view === 'agenda'    && <Agenda     store={store} showToast={showToast} />}
           {view === 'historico' && <Historico  store={store} showToast={showToast} />}
+          {view === 'usuarios'  && isAdmin && <Usuarios store={store} showToast={showToast} />}
           {view === 'config'    && <Configurar store={store} showToast={showToast} />}
         </main>
       )}
 
-      {/* ── FAB ── */}
-      <button className="fab" onClick={() => setModalTarefa(true)}>+</button>
+      {/* ── FAB — esconde para viewer ── */}
+      {!isViewer && (
+        <button className="fab" onClick={() => setModalTarefa(true)}>+</button>
+      )}
 
       {/* ── MODAIS ── */}
       <ModalTarefa  open={modalTarefa}  onClose={() => setModalTarefa(false)}  store={store} showToast={showToast} />
