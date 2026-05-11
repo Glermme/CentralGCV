@@ -1,25 +1,50 @@
 /* ════════════════════════════════════════════
    hooks/useStore.ts
-   Hook global de estado — substitui o S do state.js
+   Estado global — agora com Supabase
    ════════════════════════════════════════════ */
 
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
 import {
-  AppState, Tarefa, Cliente, Reuniao, AgendaRecorrente, OcorrenciaStatus,
-  Comentario, loadState, saveState, uid, fmtDate, COLORS, hslToHex,
+  AppState, Tarefa, Cliente, AgendaRecorrente,
+  loadState, saveState, uid, fmtDate, COLORS, hslToHex, buildDemoState,
 } from '@/lib/store';
+import {
+  loadFromDB, seedDemoDB,
+  dbAddCliente, dbDelCliente,
+  dbAddTarefa, dbUpdateTarefaStatus, dbDelTarefa,
+  dbAddComentario, dbDelComentario,
+  dbAddReuniao,
+  dbAddAgenda, dbDelAgenda,
+  dbSetOcorrencia,
+} from '@/lib/db';
 
 export function useStore() {
-  const [state, setState] = useState<AppState>(() => loadState());
+  const [state,   setState]   = useState<AppState>(() => loadState());
+  const [loading, setLoading] = useState(true);
 
-  // Persiste sempre que o estado mudar
+  // Carrega do Supabase na inicialização; seed automático se banco vazio
   useEffect(() => {
-    saveState(state);
-  }, [state]);
+    loadFromDB()
+      .then(async data => {
+        if (data.clientes.length === 0) {
+          const demo = buildDemoState();
+          await seedDemoDB(demo);
+          saveState(demo);
+          setState(demo);
+        } else {
+          setState(data);
+          saveState(data);
+        }
+      })
+      .catch(() => {
+        setState(loadState());
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
-  // Helper interno
+  // Helper: atualiza estado local + localStorage
   const update = useCallback((fn: (draft: AppState) => AppState) => {
     setState(prev => {
       const next = fn(structuredClone(prev));
@@ -37,14 +62,14 @@ export function useStore() {
 
   // ── CLIENTES ─────────────────────────────
 
-  const addCliente = useCallback((nome: string, empresa: string, cor: string) => {
-    update(s => ({
-      ...s,
-      clientes: [...s.clientes, { id: uid(), nome, empresa, cor }],
-    }));
+  const addCliente = useCallback(async (nome: string, empresa: string, cor: string) => {
+    const cliente: Cliente = { id: uid(), nome, empresa, cor };
+    await dbAddCliente(cliente);
+    update(s => ({ ...s, clientes: [...s.clientes, cliente] }));
   }, [update]);
 
-  const delCliente = useCallback((id: string) => {
+  const delCliente = useCallback(async (id: string) => {
+    await dbDelCliente(id);
     update(s => ({
       ...s,
       clientes: s.clientes.filter(c => c.id !== id),
@@ -55,91 +80,91 @@ export function useStore() {
 
   // ── TAREFAS ──────────────────────────────
 
-  const addTarefa = useCallback((
-    clienteId: string,
-    desc: string,
-    prazo: string,
-    status: Tarefa['status']
+  const addTarefa = useCallback(async (
+    clienteId: string, desc: string, prazo: string, status: Tarefa['status']
   ) => {
     const last = [...state.reunioes].sort((a, b) => b.data.localeCompare(a.data))[0];
-    update(s => ({
-      ...s,
-      tarefas: [...s.tarefas, {
-        id: uid(), clienteId, desc, prazo, status,
-        reuniaoId: last?.id ?? null,
-        criadaEm: new Date().toISOString(),
-        comentarios: [],
-      }],
-    }));
+    const tarefa: Tarefa = {
+      id: uid(), clienteId, desc, prazo, status,
+      reuniaoId: last?.id ?? null,
+      criadaEm: new Date().toISOString(),
+      comentarios: [],
+    };
+    await dbAddTarefa(tarefa);
+    update(s => ({ ...s, tarefas: [...s.tarefas, tarefa] }));
   }, [update, state.reunioes]);
 
-  const updateTarefaStatus = useCallback((id: string, status: Tarefa['status']) => {
+  const updateTarefaStatus = useCallback(async (id: string, status: Tarefa['status']) => {
+    await dbUpdateTarefaStatus(id, status);
     update(s => ({
       ...s,
       tarefas: s.tarefas.map(t => t.id === id ? { ...t, status } : t),
     }));
   }, [update]);
 
-  const toggleConcluida = useCallback((id: string) => {
+  const toggleConcluida = useCallback(async (id: string) => {
+    const t = state.tarefas.find(t => t.id === id);
+    if (!t) return;
+    const next = t.status === 'concluida' ? 'pendente' : 'concluida';
+    await dbUpdateTarefaStatus(id, next);
     update(s => ({
       ...s,
-      tarefas: s.tarefas.map(t =>
-        t.id === id ? { ...t, status: t.status === 'concluida' ? 'pendente' : 'concluida' } : t
-      ),
+      tarefas: s.tarefas.map(t => t.id === id ? { ...t, status: next } : t),
     }));
-  }, [update]);
+  }, [update, state.tarefas]);
 
-  const cycleStatus = useCallback((id: string) => {
+  const cycleStatus = useCallback(async (id: string) => {
+    const t = state.tarefas.find(t => t.id === id);
+    if (!t) return;
     const ciclo: Tarefa['status'][] = ['pendente', 'andamento', 'concluida'];
+    const next = ciclo[(ciclo.indexOf(t.status) + 1) % ciclo.length];
+    await dbUpdateTarefaStatus(id, next);
     update(s => ({
       ...s,
-      tarefas: s.tarefas.map(t => {
-        if (t.id !== id) return t;
-        const next = ciclo[(ciclo.indexOf(t.status) + 1) % ciclo.length];
-        return { ...t, status: next };
-      }),
+      tarefas: s.tarefas.map(t => t.id === id ? { ...t, status: next } : t),
     }));
-  }, [update]);
+  }, [update, state.tarefas]);
 
-  const delTarefa = useCallback((id: string) => {
+  const delTarefa = useCallback(async (id: string) => {
+    await dbDelTarefa(id);
     update(s => ({ ...s, tarefas: s.tarefas.filter(t => t.id !== id) }));
   }, [update]);
 
-  const addTarefasBatch = useCallback((
-    clienteId: string,
-    descs: string[],
-    prazo: string
+  const addTarefasBatch = useCallback(async (
+    clienteId: string, descs: string[], prazo: string
   ) => {
     const last = [...state.reunioes].sort((a, b) => b.data.localeCompare(a.data))[0];
-    update(s => ({
-      ...s,
-      tarefas: [
-        ...s.tarefas,
-        ...descs.map(desc => ({
-          id: uid(), clienteId, desc, prazo,
-          status: 'pendente' as const,
-          reuniaoId: last?.id ?? null,
-          criadaEm: new Date().toISOString(),
-          comentarios: [],
-        })),
-      ],
+    const novas: Tarefa[] = descs.map(desc => ({
+      id: uid(), clienteId, desc, prazo,
+      status: 'pendente' as const,
+      reuniaoId: last?.id ?? null,
+      criadaEm: new Date().toISOString(),
+      comentarios: [],
     }));
+    await Promise.all(novas.map(dbAddTarefa));
+    update(s => ({ ...s, tarefas: [...s.tarefas, ...novas] }));
   }, [update, state.reunioes]);
 
   // ── COMENTÁRIOS ──────────────────────────
 
-  const addComentario = useCallback((tarefaId: string, txt: string) => {
+  const addComentario = useCallback(async (tarefaId: string, txt: string) => {
+    const data = await dbAddComentario(tarefaId, txt);
+    const at   = data?.criado_em || new Date().toISOString();
     update(s => ({
       ...s,
       tarefas: s.tarefas.map(t =>
         t.id === tarefaId
-          ? { ...t, comentarios: [...t.comentarios, { txt, at: new Date().toISOString() }] }
+          ? { ...t, comentarios: [...t.comentarios, { txt, at }] }
           : t
       ),
     }));
   }, [update]);
 
-  const delComentario = useCallback((tarefaId: string, idx: number) => {
+  const delComentario = useCallback(async (tarefaId: string, idx: number) => {
+    const t  = state.tarefas.find(t => t.id === tarefaId);
+    const cm = t?.comentarios[idx];
+    if (!cm) return;
+    await dbDelComentario(tarefaId, idx, cm.at);
     update(s => ({
       ...s,
       tarefas: s.tarefas.map(t =>
@@ -148,38 +173,35 @@ export function useStore() {
           : t
       ),
     }));
-  }, [update]);
+  }, [update, state.tarefas]);
 
   // ── REUNIÕES ─────────────────────────────
 
-  const addReuniao = useCallback((data: string, obs: string) => {
-    update(s => ({
-      ...s,
-      reunioes: [...s.reunioes, { id: uid(), data, obs }],
-    }));
+  const addReuniao = useCallback(async (data: string, obs: string) => {
+    const reuniao = { id: uid(), data, obs };
+    await dbAddReuniao(reuniao);
+    update(s => ({ ...s, reunioes: [...s.reunioes, reuniao] }));
   }, [update]);
 
   // ── AGENDAS ──────────────────────────────
 
-  const addAgenda = useCallback((agenda: Omit<AgendaRecorrente, 'id'>) => {
-    update(s => ({
-      ...s,
-      agendas: [...s.agendas, { id: uid(), ...agenda }],
-    }));
+  const addAgenda = useCallback(async (agenda: Omit<AgendaRecorrente, 'id'>) => {
+    const nova = { id: uid(), ...agenda };
+    await dbAddAgenda(nova);
+    update(s => ({ ...s, agendas: [...s.agendas, nova] }));
   }, [update]);
 
-  const delAgenda = useCallback((id: string) => {
+  const delAgenda = useCallback(async (id: string) => {
+    await dbDelAgenda(id);
     update(s => ({ ...s, agendas: s.agendas.filter(a => a.id !== id) }));
   }, [update]);
 
   // ── OCORRÊNCIAS ──────────────────────────
 
-  const setOcorrencia = useCallback((
-    agendaId: string,
-    date: string,
-    status: 'ocorreu' | 'nao',
-    motivo = ''
+  const setOcorrencia = useCallback(async (
+    agendaId: string, date: string, status: 'ocorreu' | 'nao', motivo = ''
   ) => {
+    await dbSetOcorrencia(agendaId, date, status, motivo);
     const key = `${agendaId}_${date}`;
     update(s => ({
       ...s,
@@ -206,26 +228,17 @@ export function useStore() {
   }, [state.clientes]);
 
   return {
-    // estado
     state,
-    // getters
+    loading,
     getCliente,
-    // clientes
     addCliente, delCliente,
-    // tarefas
     addTarefa, updateTarefaStatus, toggleConcluida, cycleStatus, delTarefa, addTarefasBatch,
-    // comentários
     addComentario, delComentario,
-    // reuniões
     addReuniao,
-    // agendas
     addAgenda, delAgenda,
-    // ocorrências
     setOcorrencia,
-    // utils
     randomColor,
   };
 }
 
-// Tipo exportado para os componentes usarem
 export type StoreAPI = ReturnType<typeof useStore>;

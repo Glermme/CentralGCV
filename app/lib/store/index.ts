@@ -127,7 +127,7 @@ export function hslToHex(h: number, s: number, l: number): string {
 
 // ── DEMO DATA ──────────────────────────────
 
-function buildDemoState(): AppState {
+export function buildDemoState(): AppState {
   const clientes: Cliente[] = [
     { id: uid(), nome: 'Cliente A', empresa: 'Empresa 1', cor: COLORS[0] },
     { id: uid(), nome: 'Cliente B', empresa: 'Empresa 2', cor: COLORS[2] },
