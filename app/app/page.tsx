@@ -48,10 +48,17 @@ export default function Home() {
           <div style={{ background: 'var(--cyan)', color: 'var(--dark)', fontWeight: 800, fontSize: 16, letterSpacing: -0.5, padding: '6px 11px', borderRadius: '4px 0 0 4px' }}>OSTEC</div>
           <div style={{ background: 'var(--dark2)', color: 'rgba(255,255,255,.55)', fontWeight: 600, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', padding: '6px 10px', borderRadius: '0 4px 4px 0', border: '1px solid var(--dark3)', borderLeft: 'none', lineHeight: 1.8 }}>Central GCV</div>
         </div>
-        <button
-          onClick={() => setModalReuniao(true)}
-          style={{ background: 'transparent', border: '1.5px solid var(--cyan)', color: 'var(--cyan)', borderRadius: 5, padding: '7px 14px', fontFamily: 'inherit', fontWeight: 700, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer' }}
-        >+ Reunião</button>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => setModalReuniao(true)}
+            style={{ background: 'transparent', border: '1.5px solid var(--cyan)', color: 'var(--cyan)', borderRadius: 5, padding: '7px 14px', fontFamily: 'inherit', fontWeight: 700, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer' }}
+          >+ Reunião</button>
+          <button
+            onClick={store.logout}
+            style={{ background: 'transparent', border: '1.5px solid var(--dark3)', color: 'rgba(255,255,255,.4)', borderRadius: 5, padding: '7px 14px', fontFamily: 'inherit', fontWeight: 700, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer' }}
+          >Sair</button>
+        </div>
       </header>
 
       {/* ── CYAN LINE ── */}

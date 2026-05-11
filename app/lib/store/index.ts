@@ -7,7 +7,7 @@
 
 export interface Comentario {
   txt: string;
-  at:  string; // ISO string
+  at:  string;
 }
 
 export interface Cliente {
@@ -24,22 +24,22 @@ export interface Tarefa {
   prazo:       string;
   status:      'pendente' | 'andamento' | 'concluida' | 'cancelada';
   reuniaoId:   string | null;
-  criadaEm:    string; // ISO string
+  criadaEm:    string;
   comentarios: Comentario[];
 }
 
 export interface Reuniao {
   id:   string;
-  data: string; // YYYY-MM-DD
+  data: string;
   obs:  string;
 }
 
 export interface AgendaRecorrente {
   id:         string;
   clienteId:  string;
-  ocorrencia: 1 | 2 | 3 | 4;   // Nth do mês
-  diaSemana:  1 | 2 | 3 | 4 | 5; // 1=Seg..5=Sex
-  hora:       string; // HH:mm
+  ocorrencia: 1 | 2 | 3 | 4;
+  diaSemana:  1 | 2 | 3 | 4 | 5;
+  hora:       string;
   obs:        string;
 }
 
@@ -89,8 +89,7 @@ export function fmtDT(s: string): string {
   if (!s) return '';
   const d = new Date(s);
   return (
-    d.toLocaleDateString('pt-BR') +
-    ' ' +
+    d.toLocaleDateString('pt-BR') + ' ' +
     d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   );
 }
@@ -100,14 +99,11 @@ export function isLate(prazo: string): boolean {
 }
 
 export function labelStatus(s: Tarefa['status']): string {
-  return (
-    { pendente: 'Pendente', andamento: 'Em andamento', concluida: 'Concluída', cancelada: 'Cancelada' }[s] ?? s
-  );
+  return { pendente: 'Pendente', andamento: 'Em andamento', concluida: 'Concluída', cancelada: 'Cancelada' }[s] ?? s;
 }
 
 export function proxTerca(): Date {
-  const d   = new Date();
-  const day = d.getDay();
+  const d = new Date(), day = d.getDay();
   const diff = day <= 2 ? 2 - day : 9 - day;
   const r = new Date(d);
   r.setDate(d.getDate() + diff);
@@ -168,24 +164,16 @@ export function buildDemoState(): AppState {
 
 export function loadState(): AppState {
   if (typeof window === 'undefined') return buildDemoState();
-
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      const demo = buildDemoState();
-      saveState(demo);
-      return demo;
-    }
+    if (!raw) return buildDemoState();
     const parsed = JSON.parse(raw) as AppState;
-    // Garante campos que podem faltar em dados antigos
     if (!parsed.agendas)     parsed.agendas     = [];
     if (!parsed.ocorrencias) parsed.ocorrencias = {};
     parsed.tarefas.forEach(t => { if (!t.comentarios) t.comentarios = []; });
     return parsed;
   } catch {
-    const demo = buildDemoState();
-    saveState(demo);
-    return demo;
+    return buildDemoState();
   }
 }
 

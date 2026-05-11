@@ -1,17 +1,12 @@
-/* ════════════════════════════════════════════
-   hooks/useStore.ts
-   Estado global — agora com Supabase
-   ════════════════════════════════════════════ */
-
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
 import {
   AppState, Tarefa, Cliente, AgendaRecorrente,
-  loadState, saveState, uid, fmtDate, COLORS, hslToHex, buildDemoState,
+  loadState, saveState, uid, COLORS, hslToHex, buildDemoState,
 } from '@/lib/store';
 import {
-  loadFromDB, seedDemoDB,
+  loadFromDB, seedDemoDB, upsertPerfil,
   dbAddCliente, dbDelCliente,
   dbAddTarefa, dbUpdateTarefaStatus, dbDelTarefa,
   dbAddComentario, dbDelComentario,
@@ -19,32 +14,47 @@ import {
   dbAddAgenda, dbDelAgenda,
   dbSetOcorrencia,
 } from '@/lib/db';
+import { supabase } from '@/lib/supabase';
 
 export function useStore() {
   const [state,   setState]   = useState<AppState>(() => loadState());
   const [loading, setLoading] = useState(true);
+  const [userId,  setUserId]  = useState<string | null>(null);
 
-  // Carrega do Supabase na inicialização; seed automático se banco vazio
+  // Carrega usuário e dados na inicialização
   useEffect(() => {
-    loadFromDB()
-      .then(async data => {
+    async function init() {
+      const { data: { session } } = await supabase.auth.getSession();
+      const uid_ = session?.user?.id ?? null;
+      const email = session?.user?.email ?? '';
+      setUserId(uid_);
+
+      if (!uid_) { setLoading(false); return; }
+
+      // Garante que o perfil existe
+      await upsertPerfil(uid_, email);
+
+      try {
+        const data = await loadFromDB();
         if (data.clientes.length === 0) {
           const demo = buildDemoState();
-          await seedDemoDB(demo);
-          saveState(demo);
-          setState(demo);
+          await seedDemoDB(demo, uid_);
+          const fresh = await loadFromDB();
+          setState(fresh);
+          saveState(fresh);
         } else {
           setState(data);
           saveState(data);
         }
-      })
-      .catch(() => {
+      } catch {
         setState(loadState());
-      })
-      .finally(() => setLoading(false));
+      } finally {
+        setLoading(false);
+      }
+    }
+    init();
   }, []);
 
-  // Helper: atualiza estado local + localStorage
   const update = useCallback((fn: (draft: AppState) => AppState) => {
     setState(prev => {
       const next = fn(structuredClone(prev));
@@ -52,8 +62,6 @@ export function useStore() {
       return next;
     });
   }, []);
-
-  // ── GETTERS ──────────────────────────────
 
   const getCliente = useCallback(
     (id: string) => state.clientes.find(c => c.id === id),
@@ -63,10 +71,11 @@ export function useStore() {
   // ── CLIENTES ─────────────────────────────
 
   const addCliente = useCallback(async (nome: string, empresa: string, cor: string) => {
+    if (!userId) return;
     const cliente: Cliente = { id: uid(), nome, empresa, cor };
-    await dbAddCliente(cliente);
+    await dbAddCliente(cliente, userId);
     update(s => ({ ...s, clientes: [...s.clientes, cliente] }));
-  }, [update]);
+  }, [update, userId]);
 
   const delCliente = useCallback(async (id: string) => {
     await dbDelCliente(id);
@@ -83,6 +92,7 @@ export function useStore() {
   const addTarefa = useCallback(async (
     clienteId: string, desc: string, prazo: string, status: Tarefa['status']
   ) => {
+    if (!userId) return;
     const last = [...state.reunioes].sort((a, b) => b.data.localeCompare(a.data))[0];
     const tarefa: Tarefa = {
       id: uid(), clienteId, desc, prazo, status,
@@ -90,9 +100,9 @@ export function useStore() {
       criadaEm: new Date().toISOString(),
       comentarios: [],
     };
-    await dbAddTarefa(tarefa);
+    await dbAddTarefa(tarefa, userId);
     update(s => ({ ...s, tarefas: [...s.tarefas, tarefa] }));
-  }, [update, state.reunioes]);
+  }, [update, userId, state.reunioes]);
 
   const updateTarefaStatus = useCallback(async (id: string, status: Tarefa['status']) => {
     await dbUpdateTarefaStatus(id, status);
@@ -133,6 +143,7 @@ export function useStore() {
   const addTarefasBatch = useCallback(async (
     clienteId: string, descs: string[], prazo: string
   ) => {
+    if (!userId) return;
     const last = [...state.reunioes].sort((a, b) => b.data.localeCompare(a.data))[0];
     const novas: Tarefa[] = descs.map(desc => ({
       id: uid(), clienteId, desc, prazo,
@@ -141,9 +152,9 @@ export function useStore() {
       criadaEm: new Date().toISOString(),
       comentarios: [],
     }));
-    await Promise.all(novas.map(dbAddTarefa));
+    await Promise.all(novas.map(t => dbAddTarefa(t, userId)));
     update(s => ({ ...s, tarefas: [...s.tarefas, ...novas] }));
-  }, [update, state.reunioes]);
+  }, [update, userId, state.reunioes]);
 
   // ── COMENTÁRIOS ──────────────────────────
 
@@ -164,7 +175,7 @@ export function useStore() {
     const t  = state.tarefas.find(t => t.id === tarefaId);
     const cm = t?.comentarios[idx];
     if (!cm) return;
-    await dbDelComentario(tarefaId, idx, cm.at);
+    await dbDelComentario(tarefaId, cm.at);
     update(s => ({
       ...s,
       tarefas: s.tarefas.map(t =>
@@ -178,18 +189,20 @@ export function useStore() {
   // ── REUNIÕES ─────────────────────────────
 
   const addReuniao = useCallback(async (data: string, obs: string) => {
+    if (!userId) return;
     const reuniao = { id: uid(), data, obs };
-    await dbAddReuniao(reuniao);
+    await dbAddReuniao(reuniao, userId);
     update(s => ({ ...s, reunioes: [...s.reunioes, reuniao] }));
-  }, [update]);
+  }, [update, userId]);
 
   // ── AGENDAS ──────────────────────────────
 
   const addAgenda = useCallback(async (agenda: Omit<AgendaRecorrente, 'id'>) => {
+    if (!userId) return;
     const nova = { id: uid(), ...agenda };
-    await dbAddAgenda(nova);
+    await dbAddAgenda(nova, userId);
     update(s => ({ ...s, agendas: [...s.agendas, nova] }));
-  }, [update]);
+  }, [update, userId]);
 
   const delAgenda = useCallback(async (id: string) => {
     await dbDelAgenda(id);
@@ -227,9 +240,15 @@ export function useStore() {
     return candidate;
   }, [state.clientes]);
 
+  // ── LOGOUT ───────────────────────────────
+
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut();
+    window.location.href = '/login';
+  }, []);
+
   return {
-    state,
-    loading,
+    state, loading, userId,
     getCliente,
     addCliente, delCliente,
     addTarefa, updateTarefaStatus, toggleConcluida, cycleStatus, delTarefa, addTarefasBatch,
@@ -238,6 +257,7 @@ export function useStore() {
     addAgenda, delAgenda,
     setOcorrencia,
     randomColor,
+    logout,
   };
 }
 

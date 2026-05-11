@@ -1,12 +1,11 @@
 /* ════════════════════════════════════════════
    lib/db.ts — Operações de banco (Supabase)
-   Substitui localStorage / saveState / loadState
    ════════════════════════════════════════════ */
 
 import { supabase } from '@/lib/supabase';
 import type {
   AppState, Cliente, Tarefa, Reuniao,
-  AgendaRecorrente, OcorrenciaStatus, Comentario,
+  AgendaRecorrente, Comentario,
 } from '@/lib/store';
 
 // ── LOAD COMPLETO ──────────────────────────
@@ -28,7 +27,6 @@ export async function loadFromDB(): Promise<AppState> {
     supabase.from('ocorrencias').select('*'),
   ]);
 
-  // Mapeia comentários para dentro das tarefas
   const tarefasComComentarios: Tarefa[] = (tarefas || []).map(t => ({
     id:          t.id,
     clienteId:   t.cliente_id,
@@ -42,44 +40,42 @@ export async function loadFromDB(): Promise<AppState> {
       .map((c: any): Comentario => ({ txt: c.txt, at: c.criado_em })),
   }));
 
-  // Mapeia ocorrências para o formato Record<key, OcorrenciaStatus>
-  const ocorrenciasMap: Record<string, OcorrenciaStatus> = {};
+  const ocorrenciasMap: Record<string, any> = {};
   (ocorrencias || []).forEach((o: any) => {
-    const key = `${o.agenda_id}_${o.data}`;
-    ocorrenciasMap[key] = { status: o.status, motivo: o.motivo };
+    ocorrenciasMap[`${o.agenda_id}_${o.data}`] = { status: o.status, motivo: o.motivo };
   });
 
   return {
     clientes: (clientes || []).map((c: any): Cliente => ({
-      id:      c.id,
-      nome:    c.nome,
-      empresa: c.empresa,
-      cor:     c.cor,
+      id: c.id, nome: c.nome, empresa: c.empresa, cor: c.cor,
     })),
     reunioes: (reunioes || []).map((r: any): Reuniao => ({
-      id:   r.id,
-      data: r.data,
-      obs:  r.obs,
+      id: r.id, data: r.data, obs: r.obs,
     })),
     tarefas: tarefasComComentarios,
     agendas: (agendas || []).map((a: any): AgendaRecorrente => ({
-      id:         a.id,
-      clienteId:  a.cliente_id,
-      ocorrencia: a.ocorrencia,
-      diaSemana:  a.dia_semana,
-      hora:       a.hora,
-      obs:        a.obs,
+      id: a.id, clienteId: a.cliente_id,
+      ocorrencia: a.ocorrencia, diaSemana: a.dia_semana,
+      hora: a.hora, obs: a.obs,
     })),
     ocorrencias: ocorrenciasMap,
     colorIdx: 0,
   };
 }
 
+// ── PERFIL ─────────────────────────────────
+
+export async function upsertPerfil(userId: string, email: string) {
+  await supabase.from('perfis').upsert({
+    id: userId, email, nome: email.split('@')[0],
+  }, { onConflict: 'id' });
+}
+
 // ── CLIENTES ───────────────────────────────
 
-export async function dbAddCliente(c: Cliente) {
+export async function dbAddCliente(c: Cliente, ownerId: string) {
   await supabase.from('clientes').insert({
-    id: c.id, nome: c.nome, empresa: c.empresa, cor: c.cor,
+    id: c.id, nome: c.nome, empresa: c.empresa, cor: c.cor, owner_id: ownerId,
   });
 }
 
@@ -89,14 +85,10 @@ export async function dbDelCliente(id: string) {
 
 // ── TAREFAS ────────────────────────────────
 
-export async function dbAddTarefa(t: Tarefa) {
+export async function dbAddTarefa(t: Tarefa, ownerId: string) {
   await supabase.from('tarefas').insert({
-    id:          t.id,
-    cliente_id:  t.clienteId,
-    reuniao_id:  t.reuniaoId,
-    descricao:   t.desc,
-    prazo:       t.prazo,
-    status:      t.status,
+    id: t.id, cliente_id: t.clienteId, reuniao_id: t.reuniaoId,
+    descricao: t.desc, prazo: t.prazo, status: t.status, owner_id: ownerId,
   });
 }
 
@@ -119,8 +111,7 @@ export async function dbAddComentario(tarefaId: string, txt: string) {
   return data;
 }
 
-export async function dbDelComentario(tarefaId: string, _idx: number, criadoEm: string) {
-  // Deleta pelo tarefa_id + criado_em (único o suficiente)
+export async function dbDelComentario(tarefaId: string, criadoEm: string) {
   await supabase
     .from('comentarios')
     .delete()
@@ -130,22 +121,18 @@ export async function dbDelComentario(tarefaId: string, _idx: number, criadoEm: 
 
 // ── REUNIÕES ───────────────────────────────
 
-export async function dbAddReuniao(r: Reuniao) {
+export async function dbAddReuniao(r: Reuniao, ownerId: string) {
   await supabase.from('reunioes').insert({
-    id: r.id, data: r.data, obs: r.obs,
+    id: r.id, data: r.data, obs: r.obs, owner_id: ownerId,
   });
 }
 
 // ── AGENDAS ────────────────────────────────
 
-export async function dbAddAgenda(a: AgendaRecorrente) {
+export async function dbAddAgenda(a: AgendaRecorrente, ownerId: string) {
   await supabase.from('agendas').insert({
-    id:          a.id,
-    cliente_id:  a.clienteId,
-    ocorrencia:  a.ocorrencia,
-    dia_semana:  a.diaSemana,
-    hora:        a.hora,
-    obs:         a.obs,
+    id: a.id, cliente_id: a.clienteId, ocorrencia: a.ocorrencia,
+    dia_semana: a.diaSemana, hora: a.hora, obs: a.obs, owner_id: ownerId,
   });
 }
 
@@ -156,57 +143,26 @@ export async function dbDelAgenda(id: string) {
 // ── OCORRÊNCIAS ────────────────────────────
 
 export async function dbSetOcorrencia(
-  agendaId: string,
-  data: string,
-  status: string,
-  motivo: string
+  agendaId: string, data: string, status: string, motivo: string
 ) {
   await supabase.from('ocorrencias').upsert({
-    agenda_id: agendaId,
-    data,
-    status,
-    motivo,
+    agenda_id: agendaId, data, status, motivo,
   }, { onConflict: 'agenda_id,data' });
 }
 
-// ── SEED ───────────────────────────────────
-// Popula o banco com dados demo. Chamada apenas quando o banco está vazio.
+// ── SEED DEMO ──────────────────────────────
 
-export async function seedDemoDB(state: AppState): Promise<void> {
-  // Inserções sequenciais para respeitar FK: clientes → reunioes → agendas → tarefas
-  await supabase.from('clientes').insert(
-    state.clientes.map(c => ({ id: c.id, nome: c.nome, empresa: c.empresa, cor: c.cor }))
-  );
-
-  if (state.reunioes.length) {
-    await supabase.from('reunioes').insert(
-      state.reunioes.map(r => ({ id: r.id, data: r.data, obs: r.obs }))
-    );
+export async function seedDemoDB(state: AppState, ownerId: string) {
+  for (const c of state.clientes) {
+    await dbAddCliente(c, ownerId);
   }
-
-  if (state.agendas.length) {
-    await supabase.from('agendas').insert(
-      state.agendas.map(a => ({
-        id:         a.id,
-        cliente_id: a.clienteId,
-        ocorrencia: a.ocorrencia,
-        dia_semana: a.diaSemana,
-        hora:       a.hora,
-        obs:        a.obs,
-      }))
-    );
+  for (const r of state.reunioes) {
+    await dbAddReuniao(r, ownerId);
   }
-
-  if (state.tarefas.length) {
-    await supabase.from('tarefas').insert(
-      state.tarefas.map(t => ({
-        id:         t.id,
-        cliente_id: t.clienteId,
-        reuniao_id: t.reuniaoId,
-        descricao:  t.desc,
-        prazo:      t.prazo,
-        status:     t.status,
-      }))
-    );
+  for (const a of state.agendas) {
+    await dbAddAgenda(a, ownerId);
+  }
+  for (const t of state.tarefas) {
+    await dbAddTarefa(t, ownerId);
   }
 }
