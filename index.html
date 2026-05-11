@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OSTEC — Central GCV</title>
+
+  <!-- Fontes -->
+  <link href="https://db.onlinewebfonts.com/c/d28024dd0f8248d26a677397a526960d?family=Isidora+Sans+Bold" rel="stylesheet">
+  <link href="https://db.onlinewebfonts.com/c/5a2997d9cd39bd9d0bc3295b1a73d927?family=Isidora+Sans+SemiBold" rel="stylesheet">
+  <link href="https://db.onlinewebfonts.com/c/9ef8ad7b40b9180c8d702347e01437f1?family=Isidora+Sans+Black" rel="stylesheet">
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="css/main.css">
+
+  <!-- Biblioteca XLSX -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+
+  <!-- ── HEADER ── -->
+  <header>
+    <div class="logo">
+      <div class="logo-box">OSTEC</div>
+      <div class="logo-label">Central GCV</div>
+    </div>
+    <button class="hdr-btn" onclick="openM('m-reuniao')">+ Reunião</button>
+  </header>
+  <div class="cyan-line"></div>
+
+  <!-- ── TABS ── -->
+  <div class="tabs">
+    <button class="tab active" onclick="showView('dashboard',this)">Visão Geral</button>
+    <button class="tab" onclick="showView('clientes',this)">Clientes</button>
+    <button class="tab" onclick="showView('agenda',this)">Agenda</button>
+    <button class="tab" onclick="showView('historico',this)">Histórico</button>
+    <button class="tab" onclick="showView('config',this)">Configurar</button>
+  </div>
+
+  <!-- ── VIEWS ── -->
+
+  <!-- DASHBOARD -->
+  <div class="view active" id="view-dashboard">
+    <div id="db-next" style="margin-bottom:0"></div>
+    <div class="stats-row" id="db-stats"></div>
+    <div class="sec-label">Tarefas em Aberto</div>
+    <div id="db-tasks"></div>
+  </div>
+
+  <!-- CLIENTES -->
+  <div class="view" id="view-clientes">
+    <div id="clientes-list"></div>
+  </div>
+
+  <!-- AGENDA -->
+  <div class="view" id="view-agenda">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div class="sec-label" style="margin-bottom:0;border-bottom:none">Próximas 8 semanas</div>
+      <div style="display:flex;gap:8px">
+        <button class="tb-btn export" onclick="openM('m-export-agenda')" style="margin-left:0">↓ Exportar Agenda</button>
+        <button class="tb-btn" onclick="openM('m-add-agenda')" style="border-style:solid;border-color:var(--cyan-dim);color:var(--cyan-dim)">+ Recorrência</button>
+      </div>
+    </div>
+    <div id="agenda-view"></div>
+  </div>
+
+  <!-- HISTÓRICO -->
+  <div class="view" id="view-historico">
+    <div class="sec-label">Reuniões Registradas</div>
+    <div id="hist-list"></div>
+  </div>
+
+  <!-- CONFIG -->
+  <div class="view" id="view-config">
+    <div class="config-box">
+      <div class="config-title">Adicionar <span>Cliente</span></div>
+      <label class="m-lbl">Cliente / Empresa</label>
+      <input type="text" class="m-inp" id="cfg-nome" placeholder="Nome da empresa">
+      <label class="m-lbl">Cor</label>
+      <div class="color-row" id="color-row"></div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <label class="m-lbl" style="margin-bottom:0">Paleta personalizada</label>
+        <input type="color" id="cfg-custom-color" value="#0DDBFF"
+          style="width:36px;height:36px;padding:2px;border:2px solid var(--border);border-radius:6px;cursor:pointer;background:none;"
+          oninput="selectCustomColor(this.value)" onchange="selectCustomColor(this.value)">
+        <button onclick="selectRandomColor()"
+          style="background:none;border:1.5px dashed var(--border);border-radius:6px;padding:6px 12px;font-size:10px;font-family:'Isidora Sans',sans-serif;font-weight:700;letter-spacing:.5px;color:var(--muted);cursor:pointer;transition:all .15s;text-transform:uppercase"
+          onmouseover="this.style.borderColor='var(--cyan-dim)';this.style.color='var(--cyan-dim)'"
+          onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+          🎲 Aleatória
+        </button>
+        <div id="cfg-cor-preview" style="width:36px;height:36px;border-radius:6px;border:2px solid var(--border);transition:background .2s"></div>
+      </div>
+      <button class="btn-prim" onclick="addCliente()">Adicionar Cliente</button>
+    </div>
+    <div class="sec-label">Clientes Cadastrados</div>
+    <div class="config-box" style="padding:0 18px">
+      <div id="cfg-cl-list"></div>
+    </div>
+    <div class="sec-label" style="margin-top:16px">Agendas Recorrentes</div>
+    <div class="config-box" style="padding:0 18px">
+      <div id="cfg-ag-list"></div>
+    </div>
+  </div>
+
+  <!-- ── FAB ── -->
+  <button class="fab" onclick="fabClick()">+</button>
+
+  <!-- ══ MODAIS ══ -->
+
+  <!-- TAREFA -->
+  <div class="modal-bg" id="m-tarefa">
+    <div class="modal">
+      <div class="m-head">
+        <div class="m-title">Nova <span>Tarefa</span></div>
+        <button class="m-x" onclick="closeM('m-tarefa')">✕</button>
+      </div>
+      <label class="m-lbl">Cliente</label>
+      <select class="m-sel" id="mt-cl"></select>
+      <label class="m-lbl">Descrição</label>
+      <textarea class="m-inp" id="mt-desc" rows="3" placeholder="O que precisa ser feito..."></textarea>
+      <label class="m-lbl">Prazo</label>
+      <input type="date" class="m-inp" id="mt-prazo">
+      <label class="m-lbl">Status</label>
+      <select class="m-sel" id="mt-status">
+        <option value="pendente">Pendente</option>
+        <option value="andamento">Em andamento</option>
+      </select>
+      <button class="m-btn" onclick="saveTarefa()">Salvar Tarefa</button>
+    </div>
+  </div>
+
+  <!-- REUNIÃO -->
+  <div class="modal-bg" id="m-reuniao">
+    <div class="modal">
+      <div class="m-head">
+        <div class="m-title">Registrar <span>Reunião</span></div>
+        <button class="m-x" onclick="closeM('m-reuniao')">✕</button>
+      </div>
+      <label class="m-lbl">Data</label>
+      <input type="date" class="m-inp" id="mr-data">
+      <label class="m-lbl">Observações (opcional)</label>
+      <textarea class="m-inp" id="mr-obs" rows="2" placeholder="Pontos gerais desta terça..."></textarea>
+      <button class="m-btn" onclick="saveReuniao()">Registrar</button>
+    </div>
+  </div>
+
+  <!-- BATCH -->
+  <div class="modal-bg" id="m-batch">
+    <div class="modal">
+      <div class="m-head">
+        <div class="m-title" id="batch-title">Importar em <span>Lote</span></div>
+        <button class="m-x" onclick="closeM('m-batch')">✕</button>
+      </div>
+      <label class="m-lbl">Cole o texto (parágrafo = 1 tarefa)</label>
+      <textarea class="batch-ta" id="batch-txt" oninput="previewBatch()" placeholder="Cole os parágrafos aqui..."></textarea>
+      <div class="batch-prev" id="batch-prev"></div>
+      <label class="m-lbl">Prazo padrão (opcional)</label>
+      <input type="date" class="m-inp" id="batch-prazo">
+      <button class="m-btn" style="background:var(--cyan-dim)" onclick="importBatch()">Importar Tarefas</button>
+    </div>
+  </div>
+
+  <!-- ADD RECORRÊNCIA -->
+  <div class="modal-bg" id="m-add-agenda">
+    <div class="modal">
+      <div class="m-head">
+        <div class="m-title">Nova <span>Recorrência</span></div>
+        <button class="m-x" onclick="closeM('m-add-agenda')">✕</button>
+      </div>
+      <label class="m-lbl">Cliente</label>
+      <select class="m-sel" id="ag-cl"></select>
+      <div class="m-row">
+        <div style="flex:1">
+          <label class="m-lbl">Ocorrência no mês</label>
+          <select class="m-sel" id="ag-ocorr" style="margin-bottom:0">
+            <option value="1">1ª do mês</option>
+            <option value="2">2ª do mês</option>
+            <option value="3">3ª do mês</option>
+            <option value="4">4ª do mês</option>
+          </select>
+        </div>
+        <div style="flex:1">
+          <label class="m-lbl">Dia da semana</label>
+          <select class="m-sel" id="ag-diaSem" style="margin-bottom:0">
+            <option value="1">Segunda-feira</option>
+            <option value="2">Terça-feira</option>
+            <option value="3">Quarta-feira</option>
+            <option value="4">Quinta-feira</option>
+            <option value="5">Sexta-feira</option>
+          </select>
+        </div>
+      </div>
+      <div style="height:10px"></div>
+      <label class="m-lbl">Horário</label>
+      <input type="time" class="m-inp" id="ag-hora" value="14:00">
+      <label class="m-lbl">Observação (opcional)</label>
+      <input type="text" class="m-inp" id="ag-obs" placeholder="Ex: revisão mensal de segurança">
+      <button class="m-btn" onclick="saveAgendaRecorrente()">Adicionar Recorrência</button>
+    </div>
+  </div>
+
+  <!-- MOTIVO NÃO OCORREU -->
+  <div class="modal-bg" id="m-motivo">
+    <div class="modal">
+      <div class="m-head">
+        <div class="m-title">Motivo <span>Não Ocorreu</span></div>
+        <button class="m-x" onclick="closeM('m-motivo')">✕</button>
+      </div>
+      <label class="m-lbl">Qual o motivo?</label>
+      <textarea class="m-inp" id="motivo-txt" rows="3" placeholder="Ex: cliente cancelou, reagendado..."></textarea>
+      <button class="m-btn" onclick="saveMotivo()">Salvar</button>
+    </div>
+  </div>
+
+  <!-- EXPORT AGENDA -->
+  <div class="modal-bg" id="m-export-agenda">
+    <div class="modal">
+      <div class="m-head">
+        <div class="m-title">Exportar <span>Agenda</span></div>
+        <button class="m-x" onclick="closeM('m-export-agenda')">✕</button>
+      </div>
+      <div class="export-filter">
+        <label class="m-lbl">Filtro por período</label>
+        <div class="m-row">
+          <input type="date" class="m-inp" id="exp-de" style="margin-bottom:0">
+          <input type="date" class="m-inp" id="exp-ate" style="margin-bottom:0">
+        </div>
+      </div>
+      <div class="export-filter" style="margin-top:0">
+        <label class="m-lbl">Filtro por cliente (opcional)</label>
+        <select class="m-sel" id="exp-cl" style="margin-bottom:0">
+          <option value="">Todos os clientes</option>
+        </select>
+      </div>
+      <button class="m-btn" onclick="exportAgendaXLS()">↓ Baixar XLS</button>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
+  <!-- ── SCRIPTS (ordem importa) ── -->
+  <script src="js/state.js"></script>
+  <script src="js/tarefas.js"></script>
+  <script src="js/clientes.js"></script>
+  <script src="js/agenda.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+
+</body>
+</html>
