@@ -19,12 +19,12 @@ type ViewName = 'geral' | 'dashboard' | 'clientes' | 'kanban' | 'agenda' | 'hist
 
 export default function Home() {
   const store = useStore();
-  const [view,          setView]          = useState<ViewName>('geral');
-  const [modalTarefa,   setModalTarefa]   = useState(false);
-  const [modalReuniao,  setModalReuniao]  = useState(false);
-  const [modalExport,   setModalExport]   = useState(false);
-  const [toast,         setToast]         = useState('');
-  const [toastVisible,  setToastVisible]  = useState(false);
+  const [view,         setView]         = useState<ViewName>('geral');
+  const [modalTarefa,  setModalTarefa]  = useState(false);
+  const [modalReuniao, setModalReuniao] = useState(false);
+  const [modalExport,  setModalExport]  = useState(false);
+  const [toast,        setToast]        = useState('');
+  const [toastVisible, setToastVisible] = useState(false);
 
   const isAdmin  = store.userRole === 'admin';
   const isViewer = store.userRole === 'viewer';
@@ -35,12 +35,12 @@ export default function Home() {
   }, []);
 
   const tabs = [
-    { id: 'geral'     as ViewName, label: 'Visão Geral' },
-    { id: 'dashboard' as ViewName, label: 'Dashboard'   },
-    { id: 'clientes'  as ViewName, label: 'Clientes'    },
-    { id: 'kanban'    as ViewName, label: 'Kanban'       },
-    { id: 'agenda'    as ViewName, label: 'Agenda'       },
-    { id: 'historico' as ViewName, label: 'Histórico'   },
+    { id: 'geral'     as ViewName, label: 'Visão Geral'    },
+    { id: 'dashboard' as ViewName, label: 'Dashboard'      },
+    { id: 'clientes'  as ViewName, label: 'Clientes'       },
+    { id: 'kanban'    as ViewName, label: 'Kanban'          },
+    { id: 'agenda'    as ViewName, label: 'Agenda & Scans'  },
+    { id: 'historico' as ViewName, label: 'Histórico'      },
     ...(isAdmin ? [{ id: 'usuarios' as ViewName, label: 'Usuários' }] : []),
   ];
 
@@ -51,14 +51,12 @@ export default function Home() {
           <div style={{ background: 'var(--cyan)', color: 'var(--dark)', fontWeight: 800, fontSize: 16, letterSpacing: -0.5, padding: '6px 11px', borderRadius: '4px 0 0 4px' }}>OSTEC</div>
           <div style={{ background: 'var(--dark2)', color: 'rgba(255,255,255,.55)', fontWeight: 600, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', padding: '6px 10px', borderRadius: '0 4px 4px 0', border: '1px solid var(--dark3)', borderLeft: 'none', lineHeight: 1.8 }}>Central GCV</div>
         </div>
-
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {/* Exportar */}
-          <button onClick={() => setModalExport(true)} style={{ background: 'transparent', border: '1.5px solid var(--dark3)', color: 'rgba(255,255,255,.5)', borderRadius: 5, padding: '7px 14px', fontFamily: 'inherit', fontWeight: 700, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer', transition: 'all .15s' }}
+          <button onClick={() => setModalExport(true)}
+            style={{ background: 'transparent', border: '1.5px solid var(--dark3)', color: 'rgba(255,255,255,.5)', borderRadius: 5, padding: '7px 14px', fontFamily: 'inherit', fontWeight: 700, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer', transition: 'all .15s' }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--success)'; (e.currentTarget as HTMLElement).style.color = 'var(--success)'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--dark3)'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.5)'; }}
           >↓ XLS</button>
-
           {isAdmin && (
             <button onClick={store.toggleGlobalView} style={{ background: store.globalView ? 'var(--cyan)' : 'transparent', border: `1.5px solid ${store.globalView ? 'var(--cyan)' : 'var(--dark3)'}`, color: store.globalView ? 'var(--dark)' : 'rgba(255,255,255,.4)', borderRadius: 5, padding: '7px 14px', fontFamily: 'inherit', fontWeight: 700, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer', transition: 'all .15s' }}>⊞ Global</button>
           )}
