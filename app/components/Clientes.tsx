@@ -10,15 +10,10 @@ interface Props {
   showToast: (msg: string) => void;
 }
 
-// 6 presets vivos — último slot é o picker nativo
 const PRESET_COLORS = ['#0ab8d8', '#2aaa5a', '#e8830a', '#7c3aed', '#c0392b', '#0f766e'];
 
 export default function Clientes({ store, showToast }: Props) {
-  const {
-    state, userId, userRole,
-    toggleConcluida, cycleStatus, delTarefa, addTarefa, addTarefasBatch,
-    addComentario, delComentario, addCliente, delCliente, randomColor,
-  } = store;
+  const { state, userId, userRole, toggleConcluida, cycleStatus, delTarefa, addTarefa, addTarefasBatch, addComentario, delComentario, addCliente, delCliente, randomColor } = store;
 
   const [novoNome, setNovoNome] = useState('');
   const [novaCor,  setNovaCor]  = useState(PRESET_COLORS[0]);
@@ -28,58 +23,47 @@ export default function Clientes({ store, showToast }: Props) {
   const [formOpen,  setFormOpen]  = useState<Record<string, boolean>>({});
   const [cmntOpen,  setCmntOpen]  = useState<Record<string, boolean>>({});
   const [batchOpen, setBatchOpen] = useState<string | null>(null);
-  const [compartilharCliente, setCompartilharCliente] = useState<{
-    id: string; nome: string; cor: string; ownerId: string;
-  } | null>(null);
+  const [compartilharCliente, setCompartilharCliente] = useState<{ id: string; nome: string; cor: string; ownerId: string } | null>(null);
 
   const [formDesc,   setFormDesc]   = useState<Record<string, string>>({});
   const [formPrazo,  setFormPrazo]  = useState<Record<string, string>>({});
   const [formStatus, setFormStatus] = useState<Record<string, string>>({});
   const [batchTxt,   setBatchTxt]   = useState('');
   const [batchPrazo, setBatchPrazo] = useState('');
-  const [cmntInput,  setCmntInput]  = useState<Record<string, string>>({});
 
-  const isViewer = userRole === 'viewer';
+  // Comentários
+  const [cmntInput,  setCmntInput]  = useState<Record<string, string>>({});
+  const [cmntFiles,  setCmntFiles]  = useState<Record<string, File[]>>({});
+  const [cmntLoading, setCmntLoading] = useState<Record<string, boolean>>({});
+  const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const isViewer  = userRole === 'viewer';
   const usedCores = state.clientes.map(c => c.cor.toLowerCase());
   const isPickerActive = !PRESET_COLORS.includes(novaCor);
 
   async function handleAddCliente() {
     if (!novoNome.trim()) { showToast('Digite o nome'); return; }
-    if (usedCores.includes(novaCor.toLowerCase())) {
-      showToast('Essa cor já está em uso'); return;
-    }
+    if (usedCores.includes(novaCor.toLowerCase())) { showToast('Essa cor já está em uso'); return; }
     await addCliente(novoNome.trim(), novoNome.trim(), novaCor);
     setNovoNome('');
-    const next = PRESET_COLORS.find(c => !usedCores.includes(c.toLowerCase()) && c !== novaCor)
-      || randomColor();
+    const next = PRESET_COLORS.find(c => !usedCores.includes(c.toLowerCase()) && c !== novaCor) || randomColor();
     setNovaCor(next);
     showToast('Cliente adicionado ✓');
   }
 
   async function handleDelCliente(id: string, nome: string) {
     if (!confirm(`Remover "${nome}" e todas as suas tarefas?`)) return;
-    await delCliente(id);
-    showToast('Cliente removido');
+    await delCliente(id); showToast('Cliente removido');
   }
 
-  function handleRandom() {
-    const cor = randomColor();
-    setNovaCor(cor);
-    if (pickerRef.current) pickerRef.current.value = cor;
-  }
-
-  function toggle(id: string) {
-    setExpanded(p => ({ ...p, [id]: !p[id] }));
-  }
+  function toggle(id: string) { setExpanded(p => ({ ...p, [id]: !p[id] })); }
 
   function handleAddInline(cid: string) {
     const desc = (formDesc[cid] || '').trim();
     if (!desc) { showToast('Descreva a tarefa'); return; }
     addTarefa(cid, desc, formPrazo[cid] || '', (formStatus[cid] || 'pendente') as any);
-    setFormDesc(p  => ({ ...p, [cid]: '' }));
-    setFormPrazo(p => ({ ...p, [cid]: '' }));
-    setFormOpen(p  => ({ ...p, [cid]: false }));
-    showToast('Tarefa adicionada ✓');
+    setFormDesc(p => ({ ...p, [cid]: '' })); setFormPrazo(p => ({ ...p, [cid]: '' }));
+    setFormOpen(p => ({ ...p, [cid]: false })); showToast('Tarefa adicionada ✓');
   }
 
   function handleBatch(cid: string) {
@@ -90,12 +74,40 @@ export default function Clientes({ store, showToast }: Props) {
     showToast(`${ps.length} tarefa${ps.length > 1 ? 's' : ''} importada${ps.length > 1 ? 's' : ''} ✓`);
   }
 
-  function handleAddCmnt(tid: string) {
-    const txt = (cmntInput[tid] || '').trim();
-    if (!txt) return;
-    addComentario(tid, txt);
+  async function handleAddCmnt(tid: string) {
+    const txt  = (cmntInput[tid] || '').trim();
+    const files = cmntFiles[tid] || [];
+    if (!txt && !files.length) return;
+    setCmntLoading(p => ({ ...p, [tid]: true }));
+    await addComentario(tid, txt, files);
     setCmntInput(p => ({ ...p, [tid]: '' }));
+    setCmntFiles(p => ({ ...p, [tid]: [] }));
+    setCmntLoading(p => ({ ...p, [tid]: false }));
     showToast('Comentário adicionado');
+  }
+
+  function handleFileSelect(tid: string, files: FileList | null) {
+    if (!files) return;
+    setCmntFiles(p => ({ ...p, [tid]: [...(p[tid] || []), ...Array.from(files)] }));
+  }
+
+  function removeFile(tid: string, idx: number) {
+    setCmntFiles(p => ({ ...p, [tid]: p[tid].filter((_, i) => i !== idx) }));
+  }
+
+  function isImage(url: string) {
+    return /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(url);
+  }
+
+  // Avatar iniciais
+  function Avatar({ nome, avatar, size = 28 }: { nome: string; avatar: string; size?: number }) {
+    return avatar ? (
+      <img src={avatar} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+    ) : (
+      <div style={{ width: size, height: size, borderRadius: '50%', background: 'var(--dark)', color: 'var(--cyan)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: size * .45, flexShrink: 0 }}>
+        {nome?.charAt(0)?.toUpperCase() || '?'}
+      </div>
+    );
   }
 
   return (
@@ -103,176 +115,48 @@ export default function Clientes({ store, showToast }: Props) {
 
       {/* ══ CARD NOVO CLIENTE ══ */}
       {!isViewer && (
-        <div style={{
-          background: 'white',
-          border: '1px solid var(--border)',
-          borderRadius: 16,
-          overflow: 'hidden',
-          position: 'sticky',
-          top: 78,
-          boxShadow: '0 4px 20px rgba(35,31,32,.08)',
-        }}>
-          {/* Topo colorido */}
-          <div style={{
-            background: 'var(--dark)',
-            padding: '20px 20px 16px',
-            borderBottom: `3px solid ${novaCor}`,
-            transition: 'border-color .3s',
-          }}>
+        <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden', position: 'sticky', top: 78, boxShadow: '0 4px 20px rgba(35,31,32,.08)' }}>
+          <div style={{ background: 'var(--dark)', padding: '20px 20px 16px', borderBottom: `3px solid ${novaCor}`, transition: 'border-color .3s' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{
-                width: 44, height: 44, borderRadius: 10,
-                background: novaCor,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 20, fontWeight: 800, color: 'white',
-                flexShrink: 0, transition: 'background .3s',
-                boxShadow: `0 4px 12px ${novaCor}55`,
-              }}>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: novaCor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800, color: 'white', flexShrink: 0, transition: 'background .3s', boxShadow: `0 4px 12px ${novaCor}55` }}>
                 {novoNome ? novoNome.charAt(0).toUpperCase() : '+'}
               </div>
               <div>
-                <div style={{ fontWeight: 800, fontSize: 14, color: 'white', letterSpacing: -.2 }}>
-                  {novoNome || 'Novo Cliente'}
-                </div>
-                <div style={{ fontSize: 10, color: 'rgba(255,255,255,.4)', marginTop: 2, letterSpacing: .5 }}>
-                  CENTRAL GCV
-                </div>
+                <div style={{ fontWeight: 800, fontSize: 14, color: 'white' }}>{novoNome || 'Novo Cliente'}</div>
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,.4)', marginTop: 2, letterSpacing: .5 }}>CENTRAL GCV</div>
               </div>
             </div>
           </div>
 
-          {/* Corpo */}
           <div style={{ padding: '18px 20px 20px' }}>
-
-            {/* Campo nome */}
-            <label style={{
-              display: 'block', fontSize: 9, fontWeight: 800,
-              color: 'var(--muted)', textTransform: 'uppercase',
-              letterSpacing: 1.5, marginBottom: 6,
-            }}>Nome da Empresa</label>
-            <input
-              type="text"
-              value={novoNome}
-              onChange={e => setNovoNome(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAddCliente()}
-              placeholder="Ex: Acme Corp"
-              style={{
-                width: '100%', padding: '10px 12px',
-                border: '1.5px solid var(--border)',
-                borderRadius: 8, fontFamily: 'inherit',
-                fontSize: 13, outline: 'none', background: 'white',
-                color: 'var(--text)', marginBottom: 16,
-                transition: 'border-color .2s',
-              }}
-              onFocus={e => (e.target.style.borderColor = novaCor)}
-              onBlur={e => (e.target.style.borderColor = 'var(--border)')}
+            <label style={{ fontSize: 9, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1.5, display: 'block', marginBottom: 6 }}>Nome da Empresa</label>
+            <input type="text" value={novoNome} onChange={e => setNovoNome(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddCliente()} placeholder="Ex: Acme Corp"
+              style={{ width: '100%', padding: '10px 12px', border: '1.5px solid var(--border)', borderRadius: 8, fontFamily: 'inherit', fontSize: 13, outline: 'none', background: 'white', marginBottom: 16, transition: 'border-color .2s' }}
+              onFocus={e => (e.target.style.borderColor = novaCor)} onBlur={e => (e.target.style.borderColor = 'var(--border)')}
             />
 
-            {/* Cor */}
-            <label style={{
-              display: 'block', fontSize: 9, fontWeight: 800,
-              color: 'var(--muted)', textTransform: 'uppercase',
-              letterSpacing: 1.5, marginBottom: 10,
-            }}>Cor Identificadora</label>
-
-            {/* Grid 7 slots: 6 presets + 1 picker */}
+            <label style={{ fontSize: 9, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1.5, display: 'block', marginBottom: 10 }}>Cor Identificadora</label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 7, marginBottom: 12 }}>
               {PRESET_COLORS.map(c => (
-                <button
-                  key={c}
-                  onClick={() => setNovaCor(c)}
-                  style={{
-                    aspectRatio: '1', border: 'none', borderRadius: 8,
-                    background: c, cursor: 'pointer',
-                    outline: novaCor === c ? `3px solid ${c}` : '3px solid transparent',
-                    outlineOffset: 2,
-                    transform: novaCor === c ? 'scale(1.15)' : 'scale(1)',
-                    transition: 'transform .15s, outline .15s',
-                    boxShadow: novaCor === c ? `0 3px 10px ${c}66` : '0 2px 6px rgba(0,0,0,.12)',
-                  }}
-                />
+                <button key={c} onClick={() => setNovaCor(c)} style={{ aspectRatio: '1', border: 'none', borderRadius: 8, background: c, cursor: 'pointer', outline: novaCor === c ? `3px solid ${c}` : '3px solid transparent', outlineOffset: 2, transform: novaCor === c ? 'scale(1.15)' : 'scale(1)', transition: 'transform .15s, outline .15s', boxShadow: novaCor === c ? `0 3px 10px ${c}66` : '0 2px 6px rgba(0,0,0,.12)' }} />
               ))}
-
-              {/* Picker nativo — último slot */}
-              <div style={{
-                aspectRatio: '1', borderRadius: 8, position: 'relative',
-                outline: isPickerActive ? `3px solid ${novaCor}` : '3px solid transparent',
-                outlineOffset: 2,
-                transform: isPickerActive ? 'scale(1.15)' : 'scale(1)',
-                transition: 'transform .15s, outline .15s',
-                boxShadow: isPickerActive ? `0 3px 10px ${novaCor}66` : '0 2px 6px rgba(0,0,0,.12)',
-                overflow: 'hidden',
-                cursor: 'pointer',
-              }}>
-                {/* Fundo do picker — gradiente de matiz */}
-                <div style={{
-                  position: 'absolute', inset: 0,
-                  background: isPickerActive
-                    ? novaCor
-                    : 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)',
-                  borderRadius: 8,
-                }} />
-                <input
-                  ref={pickerRef}
-                  type="color"
-                  value={novaCor}
-                  onChange={e => setNovaCor(e.target.value)}
-                  style={{
-                    position: 'absolute', inset: 0,
-                    width: '100%', height: '100%',
-                    opacity: 0, cursor: 'pointer',
-                    border: 'none', padding: 0,
-                  }}
-                />
+              <div style={{ aspectRatio: '1', borderRadius: 8, position: 'relative', outline: isPickerActive ? `3px solid ${novaCor}` : '3px solid transparent', outlineOffset: 2, transform: isPickerActive ? 'scale(1.15)' : 'scale(1)', transition: 'transform .15s', boxShadow: isPickerActive ? `0 3px 10px ${novaCor}66` : '0 2px 6px rgba(0,0,0,.12)', overflow: 'hidden', cursor: 'pointer' }}>
+                <div style={{ position: 'absolute', inset: 0, background: isPickerActive ? novaCor : 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)', borderRadius: 8 }} />
+                <input ref={pickerRef} type="color" value={novaCor} onChange={e => setNovaCor(e.target.value)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer', border: 'none', padding: 0 }} />
               </div>
             </div>
 
-            {/* Preview + aleatória */}
             <div style={{ display: 'flex', gap: 8, alignItems: 'stretch', marginBottom: 16 }}>
-              {/* Preview */}
-              <div style={{
-                width: 40, height: 40, borderRadius: 8,
-                background: novaCor, flexShrink: 0,
-                border: '2px solid var(--border)',
-                transition: 'background .2s',
-                boxShadow: `0 3px 10px ${novaCor}44`,
-              }} />
-              {/* Botão aleatória */}
-              <button
-                onClick={handleRandom}
-                style={{
-                  flex: 1, background: 'var(--ivory2)',
-                  border: '1.5px dashed var(--border)',
-                  borderRadius: 8, padding: '8px 10px',
-                  fontSize: 10, fontFamily: 'inherit', fontWeight: 800,
-                  color: 'var(--muted)', cursor: 'pointer',
-                  textTransform: 'uppercase', letterSpacing: .8,
-                  transition: 'all .15s',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                }}
-                onMouseEnter={e => {
-                  (e.currentTarget as HTMLElement).style.borderColor = novaCor;
-                  (e.currentTarget as HTMLElement).style.color = novaCor;
-                }}
-                onMouseLeave={e => {
-                  (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)';
-                  (e.currentTarget as HTMLElement).style.color = 'var(--muted)';
-                }}
+              <div style={{ width: 40, height: 40, borderRadius: 8, background: novaCor, flexShrink: 0, border: '2px solid var(--border)', transition: 'background .2s', boxShadow: `0 3px 10px ${novaCor}44` }} />
+              <button onClick={() => setNovaCor(randomColor())}
+                style={{ flex: 1, background: 'var(--ivory2)', border: '1.5px dashed var(--border)', borderRadius: 8, padding: '8px 10px', fontSize: 10, fontFamily: 'inherit', fontWeight: 800, color: 'var(--muted)', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: .8, transition: 'all .15s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = novaCor; (e.currentTarget as HTMLElement).style.color = novaCor; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
               >🎲 Aleatória</button>
             </div>
 
-            {/* Botão adicionar */}
-            <button
-              onClick={handleAddCliente}
-              style={{
-                width: '100%', padding: '12px',
-                background: novaCor, color: 'white',
-                border: 'none', borderRadius: 10,
-                fontFamily: 'inherit', fontWeight: 800, fontSize: 12,
-                cursor: 'pointer', textTransform: 'uppercase', letterSpacing: .8,
-                transition: 'all .2s',
-                boxShadow: `0 6px 18px ${novaCor}44`,
-              }}
+            <button onClick={handleAddCliente}
+              style={{ width: '100%', padding: '12px', background: novaCor, color: 'white', border: 'none', borderRadius: 10, fontFamily: 'inherit', fontWeight: 800, fontSize: 12, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: .8, transition: 'all .2s', boxShadow: `0 6px 18px ${novaCor}44` }}
               onMouseEnter={e => (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'}
               onMouseLeave={e => (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'}
             >+ Adicionar Cliente</button>
@@ -280,13 +164,9 @@ export default function Clientes({ store, showToast }: Props) {
         </div>
       )}
 
-      {/* ══ LISTA DE CLIENTES ══ */}
+      {/* ══ LISTA ══ */}
       <div>
-        {state.clientes.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 30, color: 'var(--muted)', fontSize: 12 }}>
-            Nenhum cliente. Adicione pelo painel ao lado.
-          </div>
-        )}
+        {state.clientes.length === 0 && <div style={{ textAlign: 'center', padding: 30, color: 'var(--muted)', fontSize: 12 }}>Nenhum cliente. Adicione pelo painel ao lado.</div>}
 
         {state.clientes.map(c => {
           const ts   = state.tarefas.filter(t => t.clienteId === c.id);
@@ -297,138 +177,140 @@ export default function Clientes({ store, showToast }: Props) {
           const open = expanded[c.id];
 
           return (
-            <div key={c.id} style={{
-              background: 'white', border: '1px solid var(--border)',
-              borderRadius: 10, marginBottom: 10, overflow: 'hidden',
-              boxShadow: '0 2px 8px rgba(35,31,32,.06)',
-            }}>
-              {/* Header */}
-              <div onClick={() => toggle(c.id)} style={{
-                padding: '13px 16px', display: 'flex', alignItems: 'center',
-                gap: 12, cursor: 'pointer', borderLeft: `4px solid ${c.cor}`,
-                background: 'white', transition: 'background .1s',
-              }}
+            <div key={c.id} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 10, overflow: 'hidden', boxShadow: '0 2px 8px rgba(35,31,32,.06)' }}>
+              <div onClick={() => toggle(c.id)} style={{ padding: '13px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', borderLeft: `4px solid ${c.cor}`, background: 'white', transition: 'background .1s' }}
                 onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--ivory2)'}
                 onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'white'}
               >
-                <div style={{
-                  width: 36, height: 36, borderRadius: 6, background: c.cor,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontWeight: 800, fontSize: 15, color: 'white', flexShrink: 0,
-                }}>{c.nome.charAt(0)}</div>
+                <div style={{ width: 36, height: 36, borderRadius: 6, background: c.cor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 15, color: 'white', flexShrink: 0 }}>{c.nome.charAt(0)}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text)' }}>{c.nome}</div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                    {ts.length} tarefa{ts.length !== 1 ? 's' : ''} · {pct}%
-                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{ts.length} tarefa{ts.length !== 1 ? 's' : ''} · {pct}%</div>
                   <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, marginTop: 5 }}>
                     <div style={{ height: '100%', borderRadius: 2, background: c.cor, width: `${pct}%`, transition: 'width .5s' }} />
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
                   {late.length > 0 && <span className="badge b-late">⚠{late.length}</span>}
-                  {pend.length > 0
-                    ? <span className="badge b-pend">{pend.length}</span>
-                    : ts.length > 0 ? <span className="badge b-ok">✓</span> : null}
+                  {pend.length > 0 ? <span className="badge b-pend">{pend.length}</span> : ts.length > 0 ? <span className="badge b-ok">✓</span> : null}
                 </div>
                 <span style={{ fontSize: 10, color: 'var(--muted)', transition: 'transform .2s', transform: open ? 'rotate(180deg)' : 'none' }}>▼</span>
               </div>
 
-              {/* Conteúdo expandido */}
               {open && (
                 <div style={{ borderTop: '1px solid var(--border)' }}>
-                  {ts.length === 0 && (
-                    <div style={{ padding: 14, textAlign: 'center', color: 'var(--muted)', fontSize: 12, fontStyle: 'italic' }}>
-                      Nenhuma tarefa ainda
-                    </div>
-                  )}
+                  {ts.length === 0 && <div style={{ padding: 14, textAlign: 'center', color: 'var(--muted)', fontSize: 12, fontStyle: 'italic' }}>Nenhuma tarefa ainda</div>}
 
                   {ts.map(t => {
                     const isLateT = isLate(t.prazo) && t.status !== 'concluida';
-                    const hasC = t.comentarios.length > 0;
+                    const hasC    = t.comentarios.length > 0;
+                    const files   = cmntFiles[t.id] || [];
+                    const loading = cmntLoading[t.id];
+
                     return (
                       <div key={t.id} style={{ background: 'var(--ivory2)', borderBottom: '1px solid var(--border)', opacity: t.status === 'concluida' ? .5 : 1 }}>
                         <div style={{ padding: '10px 16px 10px 20px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                          <div
-                            onClick={() => { if (!isViewer) { toggleConcluida(t.id); showToast(t.status === 'concluida' ? 'Reaberta' : 'Concluída ✓'); } }}
-                            style={{
-                              width: 18, height: 18,
-                              border: `2px solid ${t.status === 'concluida' ? 'var(--success)' : 'var(--border)'}`,
-                              borderRadius: 4, flexShrink: 0,
-                              cursor: isViewer ? 'default' : 'pointer',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: 10, marginTop: 2,
-                              background: t.status === 'concluida' ? 'var(--success)' : 'white',
-                              color: 'white',
-                            }}
+                          <div onClick={() => { if (!isViewer) { toggleConcluida(t.id); showToast(t.status === 'concluida' ? 'Reaberta' : 'Concluída ✓'); } }}
+                            style={{ width: 18, height: 18, border: `2px solid ${t.status === 'concluida' ? 'var(--success)' : 'var(--border)'}`, borderRadius: 4, flexShrink: 0, cursor: isViewer ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, marginTop: 2, background: t.status === 'concluida' ? 'var(--success)' : 'white', color: 'white' }}
                           >{t.status === 'concluida' ? '✓' : ''}</div>
-
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{
-                              fontSize: 13, lineHeight: 1.5,
-                              color: t.status === 'concluida' ? 'var(--muted)' : 'var(--text)',
-                              textDecoration: t.status === 'concluida' ? 'line-through' : 'none',
-                            }}>{t.desc}</div>
+                            <div style={{ fontSize: 13, lineHeight: 1.5, color: t.status === 'concluida' ? 'var(--muted)' : 'var(--text)', textDecoration: t.status === 'concluida' ? 'line-through' : 'none' }}>{t.desc}</div>
                             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 5, flexWrap: 'wrap' }}>
-                              {t.prazo && (
-                                <span style={{ fontSize: 11, color: isLateT ? 'var(--danger)' : 'var(--muted)', fontWeight: isLateT ? 600 : 400 }}>
-                                  {isLateT ? '⚠ ' : ''}{fmtBR(t.prazo)}
-                                </span>
-                              )}
-                              <button
-                                className={`spill sp-${t.status}`}
-                                onClick={() => { if (!isViewer) cycleStatus(t.id); }}
-                                style={{ cursor: isViewer ? 'default' : 'pointer' }}
-                              >{labelStatus(t.status)}</button>
+                              {t.prazo && <span style={{ fontSize: 11, color: isLateT ? 'var(--danger)' : 'var(--muted)', fontWeight: isLateT ? 600 : 400 }}>{isLateT ? '⚠ ' : ''}{fmtBR(t.prazo)}</span>}
+                              <button className={`spill sp-${t.status}`} onClick={() => { if (!isViewer) cycleStatus(t.id); }} style={{ cursor: isViewer ? 'default' : 'pointer' }}>{labelStatus(t.status)}</button>
                             </div>
                           </div>
-
                           <div style={{ display: 'flex', gap: 5, alignItems: 'flex-start', flexShrink: 0 }}>
-                            <button
-                              onClick={() => setCmntOpen(p => ({ ...p, [t.id]: !p[t.id] }))}
-                              style={{
-                                fontSize: 10, cursor: 'pointer', borderRadius: 3,
-                                padding: '3px 7px', fontWeight: 700, whiteSpace: 'nowrap',
-                                background: hasC ? 'var(--cyan-soft)' : 'white',
-                                border: hasC ? '1px solid rgba(13,219,255,.3)' : '1px solid var(--border)',
-                                color: hasC ? 'var(--cyan-dim)' : 'var(--muted)',
-                              }}
+                            <button onClick={() => setCmntOpen(p => ({ ...p, [t.id]: !p[t.id] }))}
+                              style={{ fontSize: 10, cursor: 'pointer', borderRadius: 3, padding: '3px 7px', fontWeight: 700, whiteSpace: 'nowrap', background: hasC ? 'var(--cyan-soft)' : 'white', border: hasC ? '1px solid rgba(13,219,255,.3)' : '1px solid var(--border)', color: hasC ? 'var(--cyan-dim)' : 'var(--muted)' }}
                             >💬 {hasC ? t.comentarios.length : '+'}</button>
-                            {!isViewer && (
-                              <button
-                                onClick={() => { delTarefa(t.id); showToast('Tarefa removida'); }}
-                                style={{ fontSize: 12, color: 'var(--border)', cursor: 'pointer', background: 'none', border: 'none', padding: '3px 5px', borderRadius: 3 }}
-                              >✕</button>
-                            )}
+                            {!isViewer && <button onClick={() => { delTarefa(t.id); showToast('Tarefa removida'); }} style={{ fontSize: 12, color: 'var(--border)', cursor: 'pointer', background: 'none', border: 'none', padding: '3px 5px', borderRadius: 3 }}>✕</button>}
                           </div>
                         </div>
 
-                        {/* Comentários */}
+                        {/* ── COMENTÁRIOS ── */}
                         {cmntOpen[t.id] && (
-                          <div style={{ padding: '8px 16px 12px 48px', background: 'var(--ivory3)', borderTop: '1px solid var(--border)' }}>
+                          <div style={{ padding: '10px 16px 14px 20px', background: 'var(--ivory3)', borderTop: '1px solid var(--border)' }}>
+
                             {t.comentarios.map((cm, i) => (
-                              <div key={i} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: 5, padding: '8px 10px', marginBottom: 6 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                                  <span style={{ fontSize: 10, color: 'var(--muted)' }}>{fmtDT(cm.at)}</span>
-                                  {!isViewer && <button onClick={() => delComentario(t.id, i)} style={{ fontSize: 11, color: 'var(--border)', cursor: 'pointer', background: 'none', border: 'none' }}>✕</button>}
+                              <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+                                {/* Avatar */}
+                                <Avatar nome={cm.autorNome} avatar={cm.autorAvatar} size={30} />
+
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  {/* Header */}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                    <span style={{ fontWeight: 800, fontSize: 12, color: 'var(--text)' }}>{cm.autorNome || '?'}</span>
+                                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>{fmtDT(cm.at)}</span>
+                                    {!isViewer && (
+                                      <button onClick={() => delComentario(t.id, i)} style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--border)', cursor: 'pointer', background: 'none', border: 'none' }}>✕</button>
+                                    )}
+                                  </div>
+
+                                  {/* Texto */}
+                                  {cm.txt && <div style={{ fontSize: 12, lineHeight: 1.5, color: 'var(--text)', background: 'white', border: '1px solid var(--border)', borderRadius: '0 8px 8px 8px', padding: '8px 10px', marginBottom: cm.anexos?.length ? 6 : 0 }}>{cm.txt}</div>}
+
+                                  {/* Anexos */}
+                                  {cm.anexos?.length > 0 && (
+                                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                                      {cm.anexos.map((a, ai) => (
+                                        isImage(a.url) ? (
+                                          <a key={ai} href={a.url} target="_blank" rel="noreferrer">
+                                            <img src={a.url} alt={a.nome} style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)', cursor: 'pointer' }} />
+                                          </a>
+                                        ) : (
+                                          <a key={ai} href={a.url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'white', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 700, color: 'var(--cyan-dim)', textDecoration: 'none' }}>
+                                            📎 {a.nome}
+                                          </a>
+                                        )
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
-                                <div style={{ fontSize: 12, lineHeight: 1.5 }}>{cm.txt}</div>
                               </div>
                             ))}
-                            <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                              <input
-                                type="text"
-                                value={cmntInput[t.id] || ''}
-                                onChange={e => setCmntInput(p => ({ ...p, [t.id]: e.target.value }))}
-                                onKeyDown={e => e.key === 'Enter' && handleAddCmnt(t.id)}
-                                placeholder="Escreva um comentário..."
-                                style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 4, fontFamily: 'inherit', fontSize: 12, outline: 'none', background: 'white' }}
-                              />
-                              <button
-                                onClick={() => handleAddCmnt(t.id)}
-                                style={{ background: 'var(--cyan-dim)', color: 'var(--dark)', border: 'none', borderRadius: 4, padding: '7px 12px', fontSize: 10, fontWeight: 800, cursor: 'pointer' }}
-                              >Enviar</button>
-                            </div>
+
+                            {/* Input novo comentário */}
+                            {!isViewer && (
+                              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 4 }}>
+                                <Avatar nome={store.userNome} avatar={store.userAvatar} size={30} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ display: 'flex', gap: 6, marginBottom: files.length ? 6 : 0 }}>
+                                    <input
+                                      type="text"
+                                      value={cmntInput[t.id] || ''}
+                                      onChange={e => setCmntInput(p => ({ ...p, [t.id]: e.target.value }))}
+                                      onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleAddCmnt(t.id)}
+                                      placeholder="Escreva um comentário..."
+                                      style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'inherit', fontSize: 12, outline: 'none', background: 'white' }}
+                                    />
+                                    {/* Botão anexo */}
+                                    <button onClick={() => fileRefs.current[t.id]?.click()}
+                                      style={{ padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'white', cursor: 'pointer', fontSize: 14, color: 'var(--muted)', flexShrink: 0 }}
+                                      title="Anexar arquivo"
+                                    >📎</button>
+                                    <input ref={el => { fileRefs.current[t.id] = el; }} type="file" multiple accept="*/*" style={{ display: 'none' }} onChange={e => handleFileSelect(t.id, e.target.files)} />
+                                    <button
+                                      onClick={() => handleAddCmnt(t.id)}
+                                      disabled={loading}
+                                      style={{ padding: '7px 12px', background: loading ? 'var(--border)' : 'var(--cyan-dim)', color: 'var(--dark)', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 800, cursor: loading ? 'not-allowed' : 'pointer', flexShrink: 0 }}
+                                    >{loading ? '...' : 'Enviar'}</button>
+                                  </div>
+
+                                  {/* Preview de arquivos selecionados */}
+                                  {files.length > 0 && (
+                                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                      {files.map((f, fi) => (
+                                        <div key={fi} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--ivory2)', border: '1px solid var(--border)', borderRadius: 4, padding: '3px 8px', fontSize: 11 }}>
+                                          <span style={{ color: 'var(--text)' }}>{f.name.length > 20 ? f.name.slice(0, 20) + '…' : f.name}</span>
+                                          <button onClick={() => removeFile(t.id, fi)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 12, padding: 0 }}>✕</button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -438,12 +320,7 @@ export default function Clientes({ store, showToast }: Props) {
                   {/* Form inline */}
                   {formOpen[c.id] && (
                     <div style={{ padding: '12px 16px', background: 'var(--ivory2)', borderTop: '1px solid var(--border)' }}>
-                      <textarea
-                        rows={2} placeholder="Descreva a tarefa..."
-                        value={formDesc[c.id] || ''}
-                        onChange={e => setFormDesc(p => ({ ...p, [c.id]: e.target.value }))}
-                        style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--border)', borderRadius: 5, fontFamily: 'inherit', fontSize: 13, outline: 'none', background: 'white', marginBottom: 8, resize: 'none' }}
-                      />
+                      <textarea rows={2} placeholder="Descreva a tarefa..." value={formDesc[c.id] || ''} onChange={e => setFormDesc(p => ({ ...p, [c.id]: e.target.value }))} style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--border)', borderRadius: 5, fontFamily: 'inherit', fontSize: 13, outline: 'none', background: 'white', marginBottom: 8, resize: 'none' }} />
                       <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                         <input type="date" value={formPrazo[c.id] || ''} onChange={e => setFormPrazo(p => ({ ...p, [c.id]: e.target.value }))} style={{ flex: 1, padding: '9px 12px', border: '1px solid var(--border)', borderRadius: 5, fontFamily: 'inherit', fontSize: 12, outline: 'none', background: 'white' }} />
                         <select value={formStatus[c.id] || 'pendente'} onChange={e => setFormStatus(p => ({ ...p, [c.id]: e.target.value }))} style={{ padding: '9px 12px', border: '1px solid var(--border)', borderRadius: 5, fontFamily: 'inherit', fontSize: 12, outline: 'none', background: 'white', cursor: 'pointer' }}>
@@ -486,10 +363,7 @@ export default function Clientes({ store, showToast }: Props) {
                     )}
                     <button onClick={() => setCompartilharCliente({ id: c.id, nome: c.nome, cor: c.cor, ownerId: userId || '' })} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: '1.5px solid var(--border)', borderRadius: 5, padding: '6px 13px', fontSize: 10, fontFamily: 'inherit', fontWeight: 800, letterSpacing: .5, textTransform: 'uppercase', color: 'var(--muted)', cursor: 'pointer' }}>⇄ Compartilhar</button>
                     {!isViewer && (
-                      <button
-                        onClick={() => handleDelCliente(c.id, c.nome)}
-                        style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: '1.5px solid rgba(232,48,48,.3)', borderRadius: 5, padding: '6px 13px', fontSize: 10, fontFamily: 'inherit', fontWeight: 800, letterSpacing: .5, textTransform: 'uppercase', color: 'var(--danger)', cursor: 'pointer' }}
-                      >🗑 Remover</button>
+                      <button onClick={() => handleDelCliente(c.id, c.nome)} style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: '1.5px solid rgba(232,48,48,.3)', borderRadius: 5, padding: '6px 13px', fontSize: 10, fontFamily: 'inherit', fontWeight: 800, letterSpacing: .5, textTransform: 'uppercase', color: 'var(--danger)', cursor: 'pointer' }}>🗑 Remover</button>
                     )}
                   </div>
                 </div>
@@ -500,15 +374,7 @@ export default function Clientes({ store, showToast }: Props) {
       </div>
 
       {compartilharCliente && userId && (
-        <ModalCompartilhar
-          clienteId={compartilharCliente.id}
-          clienteNome={compartilharCliente.nome}
-          clienteCor={compartilharCliente.cor}
-          ownerId={compartilharCliente.ownerId}
-          userId={userId}
-          onClose={() => setCompartilharCliente(null)}
-          showToast={showToast}
-        />
+        <ModalCompartilhar clienteId={compartilharCliente.id} clienteNome={compartilharCliente.nome} clienteCor={compartilharCliente.cor} ownerId={compartilharCliente.ownerId} userId={userId} onClose={() => setCompartilharCliente(null)} showToast={showToast} />
       )}
     </div>
   );
