@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── FONTES ISIDORA SANS ── */
+/* ── FONTES ── */
 @font-face {
   font-family: 'Isidora Sans';
   font-weight: 400;
@@ -22,25 +22,24 @@
        url('https://db.onlinewebfonts.com/t/9ef8ad7b40b9180c8d702347e01437f1.woff') format('woff');
 }
 
-/* ── TOKENS OSTEC ── */
+/* ── TOKENS ── */
 :root {
-  --cyan:       #0DDBFF;
-  --cyan-dim:   #0ab8d8;
-  --cyan-glow:  rgba(13,219,255,.18);
-  --cyan-soft:  rgba(13,219,255,.08);
-  --dark:       #231F20;
-  --dark2:      #2e2a2b;
-  --dark3:      #3a3537;
-  --ivory:      #FDFFF4;
-  --ivory2:     #F4F6E9;
-  --ivory3:     #E8EBD8;
-  --text:       #231F20;
-  --muted:      #6b6568;
-  --border:     #d8dbc8;
-  --border-d:   #3a3537;
-  --success:    #2aaa5a;
-  --warn:       #e8830a;
-  --danger:     #e83030;
+  --cyan:      #0DDBFF;
+  --cyan-dim:  #0ab8d8;
+  --cyan-glow: rgba(13,219,255,.18);
+  --cyan-soft: rgba(13,219,255,.08);
+  --dark:      #231F20;
+  --dark2:     #2e2a2b;
+  --dark3:     #3a3537;
+  --ivory:     #FDFFF4;
+  --ivory2:    #F4F6E9;
+  --ivory3:    #E8EBD8;
+  --text:      #231F20;
+  --muted:     #6b6568;
+  --border:    #d8dbc8;
+  --success:   #2aaa5a;
+  --warn:      #e8830a;
+  --danger:    #e83030;
 }
 
 /* ── RESET ── */
@@ -100,7 +99,6 @@ body {
   display: flex; align-items: center; justify-content: center;
   transition: all .18s;
   z-index: 300;
-  box-shadow: 0 4px 16px rgba(13,219,255,.3);
   animation: pulse 3s infinite;
 }
 @keyframes pulse {

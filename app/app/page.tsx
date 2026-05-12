@@ -3,28 +3,29 @@
 import { useState, useCallback } from 'react';
 import { useStore } from '@/hooks/useStore';
 
-import Dashboard  from '@/components/Dashboard';
-import Clientes   from '@/components/Clientes';
-import Agenda     from '@/components/Agenda';
-import Historico  from '@/components/Historico';
-import Configurar from '@/components/Configurar';
-import Usuarios   from '@/components/Usuarios';
+import VizaoGeral         from '@/components/VizaoGeral';
+import DashboardAnalitico from '@/components/DashboardAnalitico';
+import Clientes           from '@/components/Clientes';
+import Kanban             from '@/components/Kanban';
+import Agenda             from '@/components/Agenda';
+import Historico          from '@/components/Historico';
+import Usuarios           from '@/components/Usuarios';
 
 import ModalTarefa  from '@/components/modals/ModalTarefa';
 import ModalReuniao from '@/components/modals/ModalReuniao';
 
-type ViewName = 'dashboard' | 'clientes' | 'agenda' | 'historico' | 'usuarios' | 'config';
+type ViewName = 'geral' | 'dashboard' | 'clientes' | 'kanban' | 'agenda' | 'historico' | 'usuarios';
 
 export default function Home() {
   const store = useStore();
-  const [view,         setView]         = useState<ViewName>('dashboard');
+  const [view,         setView]         = useState<ViewName>('geral');
   const [modalTarefa,  setModalTarefa]  = useState(false);
   const [modalReuniao, setModalReuniao] = useState(false);
   const [toast,        setToast]        = useState('');
   const [toastVisible, setToastVisible] = useState(false);
 
-  const isAdmin   = store.userRole === 'admin';
-  const isViewer  = store.userRole === 'viewer';
+  const isAdmin  = store.userRole === 'admin';
+  const isViewer = store.userRole === 'viewer';
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -33,12 +34,13 @@ export default function Home() {
   }, []);
 
   const tabs = [
-    { id: 'dashboard' as ViewName, label: 'Visão Geral' },
+    { id: 'geral'     as ViewName, label: 'Visão Geral' },
+    { id: 'dashboard' as ViewName, label: 'Dashboard'   },
     { id: 'clientes'  as ViewName, label: 'Clientes'    },
-    { id: 'agenda'    as ViewName, label: 'Agenda'      },
+    { id: 'kanban'    as ViewName, label: 'Kanban'       },
+    { id: 'agenda'    as ViewName, label: 'Agenda'       },
     { id: 'historico' as ViewName, label: 'Histórico'   },
     ...(isAdmin ? [{ id: 'usuarios' as ViewName, label: 'Usuários' }] : []),
-    { id: 'config'    as ViewName, label: 'Configurar'  },
   ];
 
   return (
@@ -55,31 +57,20 @@ export default function Home() {
         </div>
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {/* Alternador de visão — só admin */}
           {isAdmin && (
             <button
               onClick={store.toggleGlobalView}
               style={{
                 background: store.globalView ? 'var(--cyan)' : 'transparent',
-                border: '1.5px solid var(--cyan)',
-                color: store.globalView ? 'var(--dark)' : 'var(--cyan)',
+                border: `1.5px solid ${store.globalView ? 'var(--cyan)' : 'var(--dark3)'}`,
+                color: store.globalView ? 'var(--dark)' : 'rgba(255,255,255,.4)',
                 borderRadius: 5, padding: '7px 14px',
                 fontFamily: 'inherit', fontWeight: 700, fontSize: 11,
                 letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
                 transition: 'all .15s',
               }}
-            >
-              {store.globalView ? '⊞ Global' : '⊞ Global'}
-            </button>
+            >⊞ Global</button>
           )}
-
-          {!isViewer && (
-            <button
-              onClick={() => setModalReuniao(true)}
-              style={{ background: 'transparent', border: '1.5px solid var(--cyan)', color: 'var(--cyan)', borderRadius: 5, padding: '7px 14px', fontFamily: 'inherit', fontWeight: 700, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer' }}
-            >+ Reunião</button>
-          )}
-
           <button
             onClick={store.logout}
             style={{ background: 'transparent', border: '1.5px solid var(--dark3)', color: 'rgba(255,255,255,.4)', borderRadius: 5, padding: '7px 14px', fontFamily: 'inherit', fontWeight: 700, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer' }}
@@ -93,30 +84,31 @@ export default function Home() {
       {/* ── TABS ── */}
       <div style={{ background: 'var(--dark)', display: 'flex', padding: '0 20px', overflowX: 'auto', gap: 2, borderBottom: '1px solid var(--dark3)' }}>
         {tabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setView(tab.id)}
-            style={{
-              padding: '12px 16px', fontFamily: 'inherit', fontWeight: 700, fontSize: 11,
-              letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
-              border: 'none', background: 'none', whiteSpace: 'nowrap',
-              color: view === tab.id ? 'var(--cyan)' : 'rgba(255,255,255,.4)',
-              borderBottom: view === tab.id ? '2.5px solid var(--cyan)' : '2.5px solid transparent',
-              marginBottom: -1,
-            }}
-          >{tab.label}</button>
+          <button key={tab.id} onClick={() => setView(tab.id)} style={{
+            padding: '12px 16px', fontFamily: 'inherit', fontWeight: 700, fontSize: 11,
+            letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
+            border: 'none', background: 'none', whiteSpace: 'nowrap',
+            color: view === tab.id ? 'var(--cyan)' : 'rgba(255,255,255,.4)',
+            borderBottom: view === tab.id ? '2.5px solid var(--cyan)' : '2.5px solid transparent',
+            marginBottom: -1,
+          }}>{tab.label}</button>
         ))}
       </div>
 
-      {/* ── BANNER VISÃO GLOBAL ── */}
       {store.globalView && (
         <div style={{ background: 'var(--cyan)', padding: '6px 20px', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontWeight: 800, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--dark)' }}>⊞ Visão Global — todos os usuários</span>
-          <button onClick={store.toggleGlobalView} style={{ marginLeft: 'auto', background: 'none', border: '1px solid var(--dark)', borderRadius: 4, padding: '2px 8px', fontSize: 10, fontWeight: 800, cursor: 'pointer', color: 'var(--dark)', textTransform: 'uppercase' }}>Voltar para minha visão</button>
+          <button onClick={store.toggleGlobalView} style={{ marginLeft: 'auto', background: 'none', border: '1px solid var(--dark)', borderRadius: 4, padding: '2px 8px', fontSize: 10, fontWeight: 800, cursor: 'pointer', color: 'var(--dark)', textTransform: 'uppercase' }}>Voltar</button>
         </div>
       )}
 
-      {/* ── LOADING ── */}
+      {store.error && (
+        <div style={{ background: 'rgba(232,48,48,.1)', borderBottom: '1px solid rgba(232,48,48,.2)', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, color: 'var(--danger)' }}>⚠ {store.error}</span>
+          <button onClick={() => window.location.reload()} style={{ marginLeft: 'auto', background: 'none', border: '1px solid var(--danger)', borderRadius: 4, padding: '2px 10px', fontSize: 10, fontWeight: 800, cursor: 'pointer', color: 'var(--danger)' }}>Recarregar</button>
+        </div>
+      )}
+
       {store.loading && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40, gap: 10, color: 'var(--muted)', fontSize: 13 }}>
           <div style={{ width: 16, height: 16, border: '2px solid var(--cyan)', borderTop: '2px solid transparent', borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
@@ -125,28 +117,23 @@ export default function Home() {
         </div>
       )}
 
-      {/* ── VIEWS ── */}
       {!store.loading && (
         <main style={{ maxWidth: 820, margin: '0 auto', padding: 20 }}>
-          {view === 'dashboard' && <Dashboard  store={store} showToast={showToast} />}
-          {view === 'clientes'  && <Clientes   store={store} showToast={showToast} />}
-          {view === 'agenda'    && <Agenda     store={store} showToast={showToast} />}
-          {view === 'historico' && <Historico  store={store} showToast={showToast} />}
+          {view === 'geral'     && <VizaoGeral         store={store} showToast={showToast} onOpenReuniao={() => setModalReuniao(true)} />}
+          {view === 'dashboard' && <DashboardAnalitico store={store} showToast={showToast} />}
+          {view === 'clientes'  && <Clientes           store={store} showToast={showToast} />}
+          {view === 'kanban'    && <Kanban             store={store} showToast={showToast} />}
+          {view === 'agenda'    && <Agenda             store={store} showToast={showToast} />}
+          {view === 'historico' && <Historico          store={store} showToast={showToast} />}
           {view === 'usuarios'  && isAdmin && <Usuarios store={store} showToast={showToast} />}
-          {view === 'config'    && <Configurar store={store} showToast={showToast} />}
         </main>
       )}
 
-      {/* ── FAB — esconde para viewer ── */}
-      {!isViewer && (
-        <button className="fab" onClick={() => setModalTarefa(true)}>+</button>
-      )}
+      {!isViewer && <button className="fab" onClick={() => setModalTarefa(true)}>+</button>}
 
-      {/* ── MODAIS ── */}
       <ModalTarefa  open={modalTarefa}  onClose={() => setModalTarefa(false)}  store={store} showToast={showToast} />
       <ModalReuniao open={modalReuniao} onClose={() => setModalReuniao(false)} store={store} showToast={showToast} />
 
-      {/* ── TOAST ── */}
       <div className={`toast ${toastVisible ? 'show' : ''}`}>{toast}</div>
     </>
   );

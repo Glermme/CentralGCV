@@ -5,12 +5,16 @@
 import { supabase } from '@/lib/supabase';
 import type {
   AppState, Cliente, Tarefa, Reuniao,
-  AgendaRecorrente, Comentario,
+  AgendaRecorrente, Comentario, AgendaExtra,
 } from '@/lib/store';
 
-// ── HELPERS DE MAPEAMENTO ──────────────────
+// ── HELPERS ────────────────────────────────
 
-function mapState(clientes: any[], reunioes: any[], tarefas: any[], comentarios: any[], agendas: any[], ocorrencias: any[]): AppState {
+function mapState(
+  clientes: any[], reunioes: any[], tarefas: any[],
+  comentarios: any[], agendas: any[], ocorrencias: any[],
+  extras: any[]
+): AppState {
   const tarefasComComentarios: Tarefa[] = (tarefas || []).map(t => ({
     id:          t.id,
     clienteId:   t.cliente_id,
@@ -42,12 +46,18 @@ function mapState(clientes: any[], reunioes: any[], tarefas: any[], comentarios:
       ocorrencia: a.ocorrencia, diaSemana: a.dia_semana,
       hora: a.hora, obs: a.obs,
     })),
+    agendasExtras: (extras || []).map((e: any): AgendaExtra => ({
+      id: e.id, clienteId: e.cliente_id, ownerId: e.owner_id,
+      data: e.data, hora: e.hora, duracao: e.duracao,
+      descricao: e.descricao, status: e.status, motivo: e.motivo,
+      criadoEm: e.criado_em,
+    })),
     ocorrencias: ocorrenciasMap,
     colorIdx: 0,
   };
 }
 
-// ── LOAD PRÓPRIO (filtrado por RLS) ────────
+// ── LOAD ───────────────────────────────────
 
 export async function loadFromDB(): Promise<AppState> {
   const [
@@ -57,6 +67,7 @@ export async function loadFromDB(): Promise<AppState> {
     { data: comentarios },
     { data: agendas },
     { data: ocorrencias },
+    { data: extras },
   ] = await Promise.all([
     supabase.from('clientes').select('*').order('criado_em'),
     supabase.from('reunioes').select('*').order('criado_em'),
@@ -64,15 +75,16 @@ export async function loadFromDB(): Promise<AppState> {
     supabase.from('comentarios').select('*').order('criado_em'),
     supabase.from('agendas').select('*').order('criado_em'),
     supabase.from('ocorrencias').select('*'),
+    supabase.from('agendas_extras').select('*').order('data').order('hora'),
   ]);
 
-  return mapState(clientes||[], reunioes||[], tarefas||[], comentarios||[], agendas||[], ocorrencias||[]);
+  return mapState(
+    clientes||[], reunioes||[], tarefas||[], comentarios||[],
+    agendas||[], ocorrencias||[], extras||[]
+  );
 }
 
-// ── LOAD GLOBAL (admin — todos os usuários) ─
-
 export async function loadAllFromDB(): Promise<AppState> {
-  // RLS já permite admin ver tudo — a query é a mesma
   return loadFromDB();
 }
 
@@ -85,10 +97,7 @@ export async function upsertPerfil(userId: string, email: string) {
 }
 
 export async function loadPerfis() {
-  const { data } = await supabase
-    .from('perfis')
-    .select('*')
-    .order('criado_em');
+  const { data } = await supabase.from('perfis').select('*').order('criado_em');
   return data || [];
 }
 
@@ -133,19 +142,13 @@ export async function dbDelTarefa(id: string) {
 
 export async function dbAddComentario(tarefaId: string, txt: string) {
   const { data } = await supabase
-    .from('comentarios')
-    .insert({ tarefa_id: tarefaId, txt })
-    .select()
-    .single();
+    .from('comentarios').insert({ tarefa_id: tarefaId, txt }).select().single();
   return data;
 }
 
 export async function dbDelComentario(tarefaId: string, criadoEm: string) {
-  await supabase
-    .from('comentarios')
-    .delete()
-    .eq('tarefa_id', tarefaId)
-    .eq('criado_em', criadoEm);
+  await supabase.from('comentarios').delete()
+    .eq('tarefa_id', tarefaId).eq('criado_em', criadoEm);
 }
 
 // ── REUNIÕES ───────────────────────────────
@@ -156,7 +159,7 @@ export async function dbAddReuniao(r: Reuniao, ownerId: string) {
   });
 }
 
-// ── AGENDAS ────────────────────────────────
+// ── AGENDAS RECORRENTES ────────────────────
 
 export async function dbAddAgenda(a: AgendaRecorrente, ownerId: string) {
   await supabase.from('agendas').insert({
@@ -169,6 +172,26 @@ export async function dbDelAgenda(id: string) {
   await supabase.from('agendas').delete().eq('id', id);
 }
 
+// ── AGENDAS EXTRAS ─────────────────────────
+
+export async function dbAddAgendaExtra(e: AgendaExtra, ownerId: string) {
+  await supabase.from('agendas_extras').insert({
+    id: e.id, cliente_id: e.clienteId, owner_id: ownerId,
+    data: e.data, hora: e.hora, duracao: e.duracao,
+    descricao: e.descricao, status: '', motivo: '',
+  });
+}
+
+export async function dbDelAgendaExtra(id: string) {
+  await supabase.from('agendas_extras').delete().eq('id', id);
+}
+
+export async function dbSetAgendaExtraStatus(
+  id: string, status: string, motivo: string
+) {
+  await supabase.from('agendas_extras').update({ status, motivo }).eq('id', id);
+}
+
 // ── OCORRÊNCIAS ────────────────────────────
 
 export async function dbSetOcorrencia(
@@ -177,13 +200,4 @@ export async function dbSetOcorrencia(
   await supabase.from('ocorrencias').upsert({
     agenda_id: agendaId, data, status, motivo,
   }, { onConflict: 'agenda_id,data' });
-}
-
-// ── SEED DEMO ──────────────────────────────
-
-export async function seedDemoDB(state: AppState, ownerId: string) {
-  for (const c of state.clientes) await dbAddCliente(c, ownerId);
-  for (const r of state.reunioes)  await dbAddReuniao(r, ownerId);
-  for (const a of state.agendas)   await dbAddAgenda(a, ownerId);
-  for (const t of state.tarefas)   await dbAddTarefa(t, ownerId);
 }

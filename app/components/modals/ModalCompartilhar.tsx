@@ -133,12 +133,12 @@ export default function ModalCompartilhar({
                   <button
                     onClick={() => handleToggle(p.id, 'editor')}
                     style={{
-                      padding: '5px 12px', borderRadius: 5, fontSize: 10, fontWeight: 800,
-                      cursor: 'pointer', border: 'none', letterSpacing: .5, textTransform: 'uppercase',
-                      background: ativo ? 'rgba(232,48,48,.1)' : 'var(--cyan-soft)',
-                      color: ativo ? 'var(--danger)' : 'var(--cyan-dim)',
-                      border: ativo ? '1px solid rgba(232,48,48,.2)' : '1px solid rgba(13,219,255,.2)',
-                    } as any}
+  padding: '5px 12px', borderRadius: 5, fontSize: 10, fontWeight: 800,
+  cursor: 'pointer', letterSpacing: .5, textTransform: 'uppercase',
+  background: ativo ? 'rgba(232,48,48,.1)' : 'var(--cyan-soft)',
+  color: ativo ? 'var(--danger)' : 'var(--cyan-dim)',
+  border: ativo ? '1px solid rgba(232,48,48,.2)' : '1px solid rgba(13,219,255,.2)',
+} as any}
                   >
                     {ativo ? 'Remover' : 'Compartilhar'}
                   </button>
