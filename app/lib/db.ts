@@ -8,6 +8,32 @@ import type {
   AgendaRecorrente, AgendaExtra, Comentario, Scan,
 } from '@/lib/store';
 
+// ── LOGS ───────────────────────────────────
+
+export async function dbLog(
+  userId: string, userNome: string,
+  acao: string, entidade: string,
+  entidadeId = '', detalhe = ''
+) {
+  try {
+    await supabase.from('logs').insert({
+      user_id: userId, user_nome: userNome,
+      acao, entidade, entidade_id: entidadeId, detalhe,
+    });
+  } catch { /* silencioso — log nunca deve quebrar a operação principal */ }
+}
+
+export async function loadLogs(limit = 200) {
+  const { data } = await supabase
+    .from('logs')
+    .select('*')
+    .order('criado_em', { ascending: false })
+    .limit(limit);
+  return data || [];
+}
+
+// ── MAP STATE ──────────────────────────────
+
 function mapState(
   clientes: any[], reunioes: any[], tarefas: any[],
   comentariosRaw: any[], agendas: any[], ocorrencias: any[],
@@ -61,6 +87,8 @@ function mapState(
   };
 }
 
+// ── LOAD ───────────────────────────────────
+
 export async function loadFromDB(): Promise<AppState> {
   const [
     { data: clientes }, { data: reunioes }, { data: tarefas },
@@ -81,11 +109,7 @@ export async function loadFromDB(): Promise<AppState> {
     supabase.from('scan_ocorrencias').select('*'),
   ]);
 
-  return mapState(
-    clientes||[], reunioes||[], tarefas||[], comentariosRaw||[],
-    agendas||[], ocorrencias||[], extras||[], perfis||[], anexos||[],
-    scans||[], scanOcorrencias||[]
-  );
+  return mapState(clientes||[], reunioes||[], tarefas||[], comentariosRaw||[], agendas||[], ocorrencias||[], extras||[], perfis||[], anexos||[], scans||[], scanOcorrencias||[]);
 }
 
 export async function loadAllFromDB(): Promise<AppState> { return loadFromDB(); }
@@ -151,7 +175,7 @@ export async function dbAddReuniao(r: Reuniao, ownerId: string) {
   await supabase.from('reunioes').insert({ id: r.id, data: r.data, obs: r.obs, owner_id: ownerId });
 }
 
-// ── AGENDAS RECORRENTES ────────────────────
+// ── AGENDAS ────────────────────────────────
 export async function dbAddAgenda(a: AgendaRecorrente, ownerId: string) {
   await supabase.from('agendas').insert({ id: a.id, cliente_id: a.clienteId, ocorrencia: a.ocorrencia, dia_semana: a.diaSemana, hora: a.hora, obs: a.obs, owner_id: ownerId });
 }

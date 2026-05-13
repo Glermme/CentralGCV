@@ -10,12 +10,13 @@ import Kanban             from '@/components/Kanban';
 import Agenda             from '@/components/Agenda';
 import Historico          from '@/components/Historico';
 import Usuarios           from '@/components/Usuarios';
+import Logs               from '@/components/Logs';
 
 import ModalTarefa  from '@/components/modals/ModalTarefa';
 import ModalReuniao from '@/components/modals/ModalReuniao';
 import ModalExport  from '@/components/modals/ModalExport';
 
-type ViewName = 'geral' | 'dashboard' | 'clientes' | 'kanban' | 'agenda' | 'historico' | 'usuarios';
+type ViewName = 'geral' | 'dashboard' | 'clientes' | 'kanban' | 'agenda' | 'historico' | 'usuarios' | 'logs';
 
 export default function Home() {
   const store = useStore();
@@ -35,13 +36,16 @@ export default function Home() {
   }, []);
 
   const tabs = [
-    { id: 'geral'     as ViewName, label: 'Visão Geral'    },
-    { id: 'dashboard' as ViewName, label: 'Dashboard'      },
-    { id: 'clientes'  as ViewName, label: 'Clientes'       },
-    { id: 'kanban'    as ViewName, label: 'Kanban'          },
-    { id: 'agenda'    as ViewName, label: 'Agenda & Scans'  },
-    { id: 'historico' as ViewName, label: 'Histórico'      },
-    ...(isAdmin ? [{ id: 'usuarios' as ViewName, label: 'Usuários' }] : []),
+    { id: 'geral'     as ViewName, label: 'Visão Geral'   },
+    { id: 'dashboard' as ViewName, label: 'Dashboard'     },
+    { id: 'clientes'  as ViewName, label: 'Clientes'      },
+    { id: 'kanban'    as ViewName, label: 'Kanban'         },
+    { id: 'agenda'    as ViewName, label: 'Agenda & Scans' },
+    { id: 'historico' as ViewName, label: 'Histórico'     },
+    ...(isAdmin ? [
+      { id: 'usuarios' as ViewName, label: 'Usuários' },
+      { id: 'logs'     as ViewName, label: 'Logs'     },
+    ] : []),
   ];
 
   return (
@@ -103,6 +107,7 @@ export default function Home() {
           {view === 'agenda'    && <Agenda             store={store} showToast={showToast} />}
           {view === 'historico' && <Historico          store={store} showToast={showToast} />}
           {view === 'usuarios'  && isAdmin && <Usuarios store={store} showToast={showToast} />}
+          {view === 'logs'      && isAdmin && <Logs showToast={showToast} />}
         </main>
       )}
 

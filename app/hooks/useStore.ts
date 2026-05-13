@@ -6,7 +6,7 @@ import {
   loadState, saveState, uid, hslToHex,
 } from '@/lib/store';
 import {
-  loadFromDB, loadAllFromDB, upsertPerfil,
+  loadFromDB, loadAllFromDB, upsertPerfil, dbLog,
   dbAddCliente, dbDelCliente,
   dbAddTarefa, dbUpdateTarefaStatus, dbDelTarefa,
   dbAddComentario, dbDelComentario, dbAddAnexo, dbUploadAnexo,
@@ -28,6 +28,11 @@ export function useStore() {
   const [userRole,   setUserRole]   = useState<'admin' | 'analista' | 'viewer'>('analista');
   const [globalView, setGlobalView] = useState(false);
   const [error,      setError]      = useState<string | null>(null);
+
+  // Helper de log
+  const log = useCallback((acao: string, entidade: string, entidadeId = '', detalhe = '') => {
+    if (userId) dbLog(userId, userNome, acao, entidade, entidadeId, detalhe);
+  }, [userId, userNome]);
 
   useEffect(() => {
     async function init() {
@@ -73,13 +78,16 @@ export function useStore() {
     if (!userId) return;
     const cliente: Cliente = { id: uid(), nome, empresa, cor };
     await dbAddCliente(cliente, userId);
+    log('criar', 'cliente', cliente.id, nome);
     update(s => ({ ...s, clientes: [...s.clientes, cliente] }));
-  }, [update, userId]);
+  }, [update, userId, log]);
 
   const delCliente = useCallback(async (id: string) => {
+    const nome = state.clientes.find(c => c.id === id)?.nome || id;
     await dbDelCliente(id);
+    log('excluir', 'cliente', id, nome);
     update(s => ({ ...s, clientes: s.clientes.filter(c => c.id !== id), tarefas: s.tarefas.filter(t => t.clienteId !== id), agendas: s.agendas.filter(a => a.clienteId !== id), agendasExtras: s.agendasExtras.filter(e => e.clienteId !== id), scans: s.scans.filter(sc => sc.clienteId !== id) }));
-  }, [update]);
+  }, [update, state.clientes, log]);
 
   // ── TAREFAS ──────────────────────────────
   const addTarefa = useCallback(async (clienteId: string, desc: string, prazo: string, status: Tarefa['status']) => {
@@ -87,41 +95,51 @@ export function useStore() {
     const last = [...state.reunioes].sort((a, b) => b.data.localeCompare(a.data))[0];
     const tarefa: Tarefa = { id: uid(), clienteId, desc, prazo, status, reuniaoId: last?.id ?? null, criadaEm: new Date().toISOString(), comentarios: [] };
     await dbAddTarefa(tarefa, userId);
+    const clienteNome = state.clientes.find(c => c.id === clienteId)?.nome || '';
+    log('criar', 'tarefa', tarefa.id, `${clienteNome}: ${desc.slice(0, 60)}`);
     update(s => ({ ...s, tarefas: [...s.tarefas, tarefa] }));
-  }, [update, userId, state.reunioes]);
+  }, [update, userId, state.reunioes, state.clientes, log]);
 
   const updateTarefaStatus = useCallback(async (id: string, status: Tarefa['status']) => {
     await dbUpdateTarefaStatus(id, status);
+    const t = state.tarefas.find(t => t.id === id);
+    log('status', 'tarefa', id, `→ ${status}${t ? ': ' + t.desc.slice(0, 40) : ''}`);
     update(s => ({ ...s, tarefas: s.tarefas.map(t => t.id === id ? { ...t, status } : t) }));
-  }, [update]);
+  }, [update, state.tarefas, log]);
 
   const toggleConcluida = useCallback(async (id: string) => {
     const t = state.tarefas.find(t => t.id === id); if (!t) return;
     const next = t.status === 'concluida' ? 'pendente' : 'concluida';
     await dbUpdateTarefaStatus(id, next);
+    log('status', 'tarefa', id, `→ ${next}: ${t.desc.slice(0, 40)}`);
     update(s => ({ ...s, tarefas: s.tarefas.map(t => t.id === id ? { ...t, status: next } : t) }));
-  }, [update, state.tarefas]);
+  }, [update, state.tarefas, log]);
 
   const cycleStatus = useCallback(async (id: string) => {
     const t = state.tarefas.find(t => t.id === id); if (!t) return;
     const ciclo: Tarefa['status'][] = ['pendente', 'andamento', 'concluida'];
     const next = ciclo[(ciclo.indexOf(t.status) + 1) % ciclo.length];
     await dbUpdateTarefaStatus(id, next);
+    log('status', 'tarefa', id, `→ ${next}: ${t.desc.slice(0, 40)}`);
     update(s => ({ ...s, tarefas: s.tarefas.map(t => t.id === id ? { ...t, status: next } : t) }));
-  }, [update, state.tarefas]);
+  }, [update, state.tarefas, log]);
 
   const delTarefa = useCallback(async (id: string) => {
+    const t = state.tarefas.find(t => t.id === id);
     await dbDelTarefa(id);
+    log('excluir', 'tarefa', id, t?.desc.slice(0, 60) || '');
     update(s => ({ ...s, tarefas: s.tarefas.filter(t => t.id !== id) }));
-  }, [update]);
+  }, [update, state.tarefas, log]);
 
   const addTarefasBatch = useCallback(async (clienteId: string, descs: string[], prazo: string) => {
     if (!userId) return;
     const last = [...state.reunioes].sort((a, b) => b.data.localeCompare(a.data))[0];
     const novas: Tarefa[] = descs.map(desc => ({ id: uid(), clienteId, desc, prazo, status: 'pendente' as const, reuniaoId: last?.id ?? null, criadaEm: new Date().toISOString(), comentarios: [] }));
     await Promise.all(novas.map(t => dbAddTarefa(t, userId)));
+    const clienteNome = state.clientes.find(c => c.id === clienteId)?.nome || '';
+    log('criar', 'tarefa', '', `lote de ${novas.length} tarefas — ${clienteNome}`);
     update(s => ({ ...s, tarefas: [...s.tarefas, ...novas] }));
-  }, [update, userId, state.reunioes]);
+  }, [update, userId, state.reunioes, state.clientes, log]);
 
   // ── COMENTÁRIOS ──────────────────────────
   const addComentario = useCallback(async (tarefaId: string, txt: string, arquivos?: File[]) => {
@@ -140,80 +158,95 @@ export function useStore() {
         }
       }
     }
+    log('comentar', 'tarefa', tarefaId, txt.slice(0, 60) + (arquivos?.length ? ` [+${arquivos.length} anexo(s)]` : ''));
     update(s => ({ ...s, tarefas: s.tarefas.map(t => t.id === tarefaId ? { ...t, comentarios: [...t.comentarios, { txt, at, autorId: userId, autorNome: userNome, autorAvatar: userAvatar, anexos }] } : t) }));
-  }, [update, userId, userNome, userAvatar]);
+  }, [update, userId, userNome, userAvatar, log]);
 
   const delComentario = useCallback(async (tarefaId: string, idx: number) => {
     const t = state.tarefas.find(t => t.id === tarefaId);
     const cm = t?.comentarios[idx]; if (!cm) return;
     await dbDelComentario(tarefaId, cm.at);
+    log('excluir', 'comentário', tarefaId, cm.txt.slice(0, 60));
     update(s => ({ ...s, tarefas: s.tarefas.map(t => t.id === tarefaId ? { ...t, comentarios: t.comentarios.filter((_, i) => i !== idx) } : t) }));
-  }, [update, state.tarefas]);
+  }, [update, state.tarefas, log]);
 
   // ── REUNIÕES ─────────────────────────────
   const addReuniao = useCallback(async (data: string, obs: string) => {
     if (!userId) return;
     const reuniao = { id: uid(), data, obs };
     await dbAddReuniao(reuniao, userId);
+    log('criar', 'reunião', reuniao.id, data + (obs ? ' — ' + obs : ''));
     update(s => ({ ...s, reunioes: [...s.reunioes, reuniao] }));
-  }, [update, userId]);
+  }, [update, userId, log]);
 
   // ── AGENDAS ──────────────────────────────
   const addAgenda = useCallback(async (agenda: Omit<AgendaRecorrente, 'id'>) => {
     if (!userId) return;
     const nova = { id: uid(), ...agenda };
     await dbAddAgenda(nova, userId);
+    const clienteNome = state.clientes.find(c => c.id === agenda.clienteId)?.nome || '';
+    log('criar', 'agenda', nova.id, clienteNome);
     update(s => ({ ...s, agendas: [...s.agendas, nova] }));
-  }, [update, userId]);
+  }, [update, userId, state.clientes, log]);
 
   const delAgenda = useCallback(async (id: string) => {
     await dbDelAgenda(id);
+    log('excluir', 'agenda', id);
     update(s => ({ ...s, agendas: s.agendas.filter(a => a.id !== id) }));
-  }, [update]);
+  }, [update, log]);
 
   // ── AGENDAS EXTRAS ────────────────────────
   const addAgendaExtra = useCallback(async (extra: Omit<AgendaExtra, 'id' | 'ownerId' | 'status' | 'motivo' | 'criadoEm'>) => {
     if (!userId) return;
     const nova: AgendaExtra = { id: uid(), ownerId: userId, status: '', motivo: '', criadoEm: new Date().toISOString(), ...extra };
     await dbAddAgendaExtra(nova, userId);
+    const clienteNome = state.clientes.find(c => c.id === extra.clienteId)?.nome || '';
+    log('criar', 'agenda extra', nova.id, `${clienteNome} ${extra.data} ${extra.hora}`);
     update(s => ({ ...s, agendasExtras: [...s.agendasExtras, nova] }));
-  }, [update, userId]);
+  }, [update, userId, state.clientes, log]);
 
   const delAgendaExtra = useCallback(async (id: string) => {
     await dbDelAgendaExtra(id);
+    log('excluir', 'agenda extra', id);
     update(s => ({ ...s, agendasExtras: s.agendasExtras.filter(e => e.id !== id) }));
-  }, [update]);
+  }, [update, log]);
 
   const setAgendaExtraStatus = useCallback(async (id: string, status: string, motivo = '') => {
     await dbSetAgendaExtraStatus(id, status, motivo);
+    log('status', 'agenda extra', id, `→ ${status}${motivo ? ': ' + motivo : ''}`);
     update(s => ({ ...s, agendasExtras: s.agendasExtras.map(e => e.id === id ? { ...e, status, motivo } : e) }));
-  }, [update]);
+  }, [update, log]);
 
   // ── SCANS ─────────────────────────────────
   const addScan = useCallback(async (scan: Omit<Scan, 'id'>) => {
     if (!userId) return;
     const novo = { id: uid(), ...scan };
     await dbAddScan(novo, userId);
+    const clienteNome = state.clientes.find(c => c.id === scan.clienteId)?.nome || '';
+    log('criar', 'scan', novo.id, clienteNome);
     update(s => ({ ...s, scans: [...s.scans, novo] }));
-  }, [update, userId]);
+  }, [update, userId, state.clientes, log]);
 
   const delScan = useCallback(async (id: string) => {
     await dbDelScan(id);
+    log('excluir', 'scan', id);
     update(s => ({ ...s, scans: s.scans.filter(sc => sc.id !== id) }));
-  }, [update]);
+  }, [update, log]);
 
   const setScanStatus = useCallback(async (scanId: string, data: string, status: 'ocorreu' | 'nao', motivo = '') => {
     await dbSetScanStatus(scanId, data, status, motivo);
+    log('status', 'scan', scanId, `${data} → ${status}${motivo ? ': ' + motivo : ''}`);
     const key = `${scanId}_${data}`;
     update(s => ({ ...s, scanOcorrencias: { ...s.scanOcorrencias, [key]: { status, motivo: status === 'ocorreu' ? '' : motivo } } }));
-  }, [update]);
+  }, [update, log]);
 
   // ── OCORRÊNCIAS ──────────────────────────
   const setOcorrencia = useCallback(async (agendaId: string, date: string, status: 'ocorreu' | 'nao', motivo = '') => {
     await dbSetOcorrencia(agendaId, date, status, motivo);
+    log('status', 'agenda', agendaId, `${date} → ${status}${motivo ? ': ' + motivo : ''}`);
     const key = `${agendaId}_${date}`;
     update(s => ({ ...s, ocorrencias: { ...s.ocorrencias, [key]: { status, motivo: status === 'ocorreu' ? '' : motivo } } }));
-  }, [update]);
+  }, [update, log]);
 
   // ── COR ALEATÓRIA ────────────────────────
   const randomColor = useCallback(() => {
@@ -229,9 +262,10 @@ export function useStore() {
   }, [state.clientes]);
 
   const logout = useCallback(async () => {
+    log('logout', 'auth', userId || '');
     await supabase.auth.signOut();
     window.location.href = '/login';
-  }, []);
+  }, [log, userId]);
 
   return {
     state, loading, error,
