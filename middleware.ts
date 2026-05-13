@@ -1,19 +1,21 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+export const runtime = 'nodejs';
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Deixa /login e assets passarem sempre
   if (pathname.startsWith('/login')) return NextResponse.next();
 
-  // Verifica cookie de sessão do Supabase
-  const token =
-    request.cookies.get('sb-access-token')?.value ||
-    request.cookies.get('sb-skevzcdrhpblifzdkydj-auth-token')?.value ||
-    [...request.cookies.getAll()].find(c => c.name.includes('auth-token'))?.value;
+  const cookies = request.cookies.getAll();
+  const hasAuth = cookies.some(c =>
+    c.name.includes('auth-token') ||
+    c.name.includes('sb-access-token') ||
+    c.name.startsWith('sb-')
+  );
 
-  if (!token) {
+  if (!hasAuth) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
