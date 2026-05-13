@@ -32,7 +32,8 @@ export default function ModalRelatorio({ open, onClose, store, showToast }: Prop
 
       // Cria iframe oculto para renderizar o HTML
       const iframe = document.createElement('iframe');
-      iframe.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:794px;height:1123px;border:none;';
+      // CORRIGIDO: height:auto para não cortar o conteúdo; visibility:hidden em vez de left:-9999px
+      iframe.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:794px;height:auto;border:none;visibility:hidden;';
       document.body.appendChild(iframe);
 
       const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
@@ -61,6 +62,7 @@ export default function ModalRelatorio({ open, onClose, store, showToast }: Prop
       const semanaLabel = `semana${semanaIdx + 1}`;
       const filename = `GCV_Relatorio_${nomeCliente}_${semanaLabel}.pdf`;
 
+      // CORRIGIDO: usar iframeDoc.body em vez de iframeDoc.documentElement
       const element = iframeDoc.body;
 
       const opt = {
@@ -73,6 +75,10 @@ export default function ModalRelatorio({ open, onClose, store, showToast }: Prop
           allowTaint: true,
           backgroundColor: '#231F20',
           windowWidth: 794,
+          // CORRIGIDO: forçar largura e remover scroll offset
+          width: 794,
+          scrollX: 0,
+          scrollY: 0,
         },
         jsPDF: {
           unit: 'mm',
@@ -82,8 +88,9 @@ export default function ModalRelatorio({ open, onClose, store, showToast }: Prop
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
       };
 
+      // CORRIGIDO: usar .from(element) com o body, não o documentElement
       // @ts-ignore
-      await window.html2pdf().set(opt).from(iframeDoc.documentElement).save();
+      await window.html2pdf().set(opt).from(element).save();
 
       document.body.removeChild(iframe);
       document.head.removeChild(script);

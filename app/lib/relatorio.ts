@@ -122,10 +122,28 @@ export function gerarHTMLRelatorio(state: AppState, de: Date, ate: Date, filtroC
 @font-face{font-family:'IS';font-weight:700;src:url('https://db.onlinewebfonts.com/t/d28024dd0f8248d26a677397a526960d.woff2') format('woff2');}
 @font-face{font-family:'IS';font-weight:900;src:url('https://db.onlinewebfonts.com/t/9ef8ad7b40b9180c8d702347e01437f1.woff2') format('woff2');}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
-body{font-family:'IS',sans-serif;background:#FDFFF4;color:#231F20;font-size:13px;line-height:1.5;width:210mm;}
+
+/* CORRIGIDO: forçar html e body a 794px para evitar corte pela metade */
+html{
+  width:794px!important;
+  max-width:794px!important;
+  overflow-x:hidden!important;
+}
+body{
+  font-family:'IS',sans-serif;
+  background:#FDFFF4;
+  color:#231F20;
+  font-size:13px;
+  line-height:1.5;
+  width:794px!important;
+  max-width:794px!important;
+  overflow-x:hidden!important;
+  margin:0!important;
+  padding:0!important;
+}
 
 /* CAPA */
-.capa{width:210mm;min-height:297mm;background:#231F20!important;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 50px;page-break-after:always;position:relative;overflow:hidden;}
+.capa{width:794px;min-height:1123px;background:#231F20!important;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 50px;page-break-after:always;position:relative;overflow:hidden;}
 .capa-top{position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#0DDBFF,#0ab8d8 60%,transparent);}
 .c1{position:absolute;width:500px;height:500px;border-radius:50%;border:1px solid rgba(13,219,255,.1);top:50%;left:50%;transform:translate(-50%,-50%);}
 .c2{position:absolute;width:700px;height:700px;border-radius:50%;border:1px solid rgba(13,219,255,.05);top:50%;left:50%;transform:translate(-50%,-50%);}
@@ -143,7 +161,7 @@ body{font-family:'IS',sans-serif;background:#FDFFF4;color:#231F20;font-size:13px
 .c-foot{position:absolute;bottom:30px;left:0;right:0;text-align:center;font-size:10px;color:rgba(255,255,255,.2)!important;letter-spacing:1px;}
 
 /* CONTEÚDO */
-.page{width:210mm;min-height:297mm;padding:35px 40px;page-break-after:always;background:#FDFFF4!important;}
+.page{width:794px;min-height:1123px;padding:35px 40px;page-break-after:always;background:#FDFFF4!important;}
 .ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;padding-bottom:14px;border-bottom:2px solid #231F20;}
 .ph-logo{display:flex;}
 .ph-lb{background:#231F20!important;color:#0DDBFF!important;font-weight:900;font-size:13px;padding:5px 9px;border-radius:3px 0 0 3px;}
