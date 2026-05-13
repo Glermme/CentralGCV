@@ -25,19 +25,75 @@ export default function ModalRelatorio({ open, onClose, store, showToast }: Prop
     store.state, semanaAtual.de, semanaAtual.ate, filtroClienteId
   );
 
-  function handleExportar() {
+  async function handleExportar() {
     setGerando(true);
     try {
       const html = gerarHTMLRelatorio(store.state, semanaAtual.de, semanaAtual.ate, filtroClienteId);
-      const win  = window.open('', '_blank');
-      if (!win) { showToast('Permita pop-ups para exportar'); setGerando(false); return; }
-      win.document.write(html);
-      win.document.close();
-      setTimeout(() => { win.focus(); win.print(); setGerando(false); }, 1200);
-      showToast('Relatório gerado ✓');
+
+      // Cria iframe oculto para renderizar o HTML
+      const iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:794px;height:1123px;border:none;';
+      document.body.appendChild(iframe);
+
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (!iframeDoc) { showToast('Erro ao gerar PDF'); setGerando(false); document.body.removeChild(iframe); return; }
+
+      iframeDoc.open();
+      iframeDoc.write(html);
+      iframeDoc.close();
+
+      // Aguarda fontes e imagens carregarem
+      await new Promise(r => setTimeout(r, 1800));
+
+      // Usa html2pdf.js via CDN
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+      document.head.appendChild(script);
+
+      await new Promise((resolve, reject) => {
+        script.onload = resolve;
+        script.onerror = reject;
+      });
+
+      const nomeCliente = filtroClienteId
+        ? store.state.clientes.find(c => c.id === filtroClienteId)?.nome?.replace(/\s+/g, '_') || 'cliente'
+        : 'todos';
+      const semanaLabel = `semana${semanaIdx + 1}`;
+      const filename = `GCV_Relatorio_${nomeCliente}_${semanaLabel}.pdf`;
+
+      const element = iframeDoc.body;
+
+      const opt = {
+        margin:       0,
+        filename,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#231F20',
+          windowWidth: 794,
+        },
+        jsPDF: {
+          unit: 'mm',
+          format: 'a4',
+          orientation: 'portrait',
+        },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+      };
+
+      // @ts-ignore
+      await window.html2pdf().set(opt).from(iframeDoc.documentElement).save();
+
+      document.body.removeChild(iframe);
+      document.head.removeChild(script);
+
+      showToast('PDF baixado ✓');
+      setGerando(false);
       onClose();
-    } catch {
-      showToast('Erro ao gerar relatório');
+    } catch (err) {
+      console.error(err);
+      showToast('Erro ao gerar PDF');
       setGerando(false);
     }
   }
@@ -97,9 +153,9 @@ export default function ModalRelatorio({ open, onClose, store, showToast }: Prop
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: clientes.length > 0 ? 16 : 0 }}>
             {[
-              { label: 'Clientes',     value: clientes.length,     color: 'var(--cyan)'    },
-              { label: 'Tarefas',      value: totalTarefas,         color: 'var(--warn)'    },
-              { label: 'Comentários',  value: totalComentarios,     color: 'var(--success)' },
+              { label: 'Clientes',    value: clientes.length,    color: 'var(--cyan)'    },
+              { label: 'Tarefas',     value: totalTarefas,        color: 'var(--warn)'    },
+              { label: 'Comentários', value: totalComentarios,    color: 'var(--success)' },
             ].map(s => (
               <div key={s.label} style={{ textAlign: 'center' }}>
                 <div style={{ fontWeight: 900, fontSize: 28, color: s.color, lineHeight: 1 }}>{s.value}</div>
@@ -128,11 +184,6 @@ export default function ModalRelatorio({ open, onClose, store, showToast }: Prop
           )}
         </div>
 
-        {/* Info */}
-        <div style={{ background: 'var(--ivory2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 11, color: 'var(--muted)', lineHeight: 1.6 }}>
-          O relatório abrirá em uma nova aba. Use <strong>Ctrl+P</strong> e selecione <strong>"Salvar como PDF"</strong>.
-        </div>
-
         {/* Botão */}
         <button
           onClick={handleExportar}
@@ -147,7 +198,13 @@ export default function ModalRelatorio({ open, onClose, store, showToast }: Prop
             textTransform: 'uppercase', letterSpacing: .8,
             transition: 'background .15s',
           }}
-        >{gerando ? 'Gerando...' : '↓ Gerar Relatório PDF'}</button>
+        >{gerando ? 'Gerando PDF...' : '↓ Baixar PDF'}</button>
+
+        {gerando && (
+          <div style={{ textAlign: 'center', marginTop: 10, fontSize: 11, color: 'var(--muted)' }}>
+            Aguarde — carregando fontes e gerando o arquivo...
+          </div>
+        )}
       </div>
     </div>
   );
