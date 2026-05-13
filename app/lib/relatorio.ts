@@ -5,25 +5,26 @@
 import { AppState, fmtBR, fmtDT } from '@/lib/store';
 import { getAgendaSlots } from '@/lib/agenda';
 
-// Retorna segunda e domingo da próxima semana a partir de hoje
-export function proximaSemana(): { de: Date; ate: Date; label: string } {
+// Retorna as próximas N semanas (seg → dom) a partir de hoje
+export function proximasSemanas(n = 4): { de: Date; ate: Date; label: string; index: number }[] {
   const hoje = new Date();
-  const diaSemana = hoje.getDay(); // 0=dom, 1=seg...6=sab
-
-  // Próxima segunda-feira
+  const diaSemana = hoje.getDay(); // 0=dom..6=sab
   const diasAteSeg = diaSemana === 0 ? 1 : 8 - diaSemana;
-  const seg = new Date(hoje);
-  seg.setDate(hoje.getDate() + diasAteSeg);
-  seg.setHours(0, 0, 0, 0);
 
-  // Domingo da mesma semana
-  const dom = new Date(seg);
-  dom.setDate(seg.getDate() + 6);
-  dom.setHours(23, 59, 59, 999);
+  const semanas = [];
+  for (let i = 0; i < n; i++) {
+    const seg = new Date(hoje);
+    seg.setDate(hoje.getDate() + diasAteSeg + i * 7);
+    seg.setHours(0, 0, 0, 0);
 
-  const label = `${fmtBR(seg.toISOString().split('T')[0])} a ${fmtBR(dom.toISOString().split('T')[0])}`;
+    const dom = new Date(seg);
+    dom.setDate(seg.getDate() + 6);
+    dom.setHours(23, 59, 59, 999);
 
-  return { de: seg, ate: dom, label };
+    const label = `Semana ${i + 1} · ${fmtBR(seg.toISOString().split('T')[0])} – ${fmtBR(dom.toISOString().split('T')[0])}`;
+    semanas.push({ de: seg, ate: dom, label, index: i + 1 });
+  }
+  return semanas;
 }
 
 export interface ClienteRelatorio {
@@ -49,40 +50,44 @@ export interface ComentarioRelatorio {
   autorNome: string;
 }
 
-export function buildRelatorioData(state: AppState): {
-  clientes: ClienteRelatorio[];
-  semana:   string;
-  geradoEm: string;
-  totalTarefas: number;
+export function buildRelatorioData(
+  state: AppState,
+  de: Date,
+  ate: Date,
+  filtroClienteId = ''
+): {
+  clientes:         ClienteRelatorio[];
+  semana:           string;
+  geradoEm:         string;
+  totalTarefas:     number;
   totalComentarios: number;
 } {
-  const { de, ate, label } = proximaSemana();
+  const deStr  = de.toISOString().split('T')[0];
+  const ateStr = ate.toISOString().split('T')[0];
+  const label  = `${fmtBR(deStr)} a ${fmtBR(ateStr)}`;
 
-  // Slots da próxima semana
+  // Slots recorrentes
   const slots = getAgendaSlots(state.agendas, de, ate)
     .sort((a, b) => a.date.getTime() - b.date.getTime() || a.hora.localeCompare(b.hora));
 
-  // Também inclui extras da próxima semana
-  const deStr  = de.toISOString().split('T')[0];
-  const ateStr = ate.toISOString().split('T')[0];
+  // Extras
   const extras = state.agendasExtras.filter(e => e.data >= deStr && e.data <= ateStr);
 
   const diasNomes = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-  // Monta set de clienteIds com agenda na semana
+  // ClienteIds com agenda na semana
   const clienteIds = new Set<string>();
   slots.forEach(s => clienteIds.add(s.clienteId));
   extras.forEach(e => clienteIds.add(e.clienteId));
 
-  // Para cada cliente, pega hora/data da primeira agenda
+  // Hora/data da primeira agenda por cliente
   const clienteAgenda: Record<string, { hora: string; data: string; diaNome: string }> = {};
   slots.forEach(s => {
     if (!clienteAgenda[s.clienteId]) {
-      const dt = s.date;
       clienteAgenda[s.clienteId] = {
         hora:    s.hora,
-        data:    fmtBR(dt.toISOString().split('T')[0]),
-        diaNome: diasNomes[dt.getDay()],
+        data:    fmtBR(s.date.toISOString().split('T')[0]),
+        diaNome: diasNomes[s.date.getDay()],
       };
     }
   });
@@ -97,12 +102,14 @@ export function buildRelatorioData(state: AppState): {
     }
   });
 
-  let totalTarefas = 0;
+  let totalTarefas     = 0;
   let totalComentarios = 0;
-
   const clientes: ClienteRelatorio[] = [];
 
   clienteIds.forEach(cid => {
+    // Filtro de cliente
+    if (filtroClienteId && cid !== filtroClienteId) return;
+
     const c = state.clientes.find(x => x.id === cid);
     if (!c) return;
 
@@ -112,7 +119,7 @@ export function buildRelatorioData(state: AppState): {
       t.status !== 'cancelada'
     );
 
-    if (!tarefasAbertas.length) return; // pula clientes sem tarefas abertas
+    if (!tarefasAbertas.length) return;
 
     const agenda = clienteAgenda[cid] || { hora: '', data: '', diaNome: '' };
 
@@ -131,21 +138,12 @@ export function buildRelatorioData(state: AppState): {
       };
     });
 
-    clientes.push({
-      id:      c.id,
-      nome:    c.nome,
-      cor:     c.cor,
-      hora:    agenda.hora,
-      data:    agenda.data,
-      diaNome: agenda.diaNome,
-      tarefas,
-    });
+    clientes.push({ id: c.id, nome: c.nome, cor: c.cor, hora: agenda.hora, data: agenda.data, diaNome: agenda.diaNome, tarefas });
   });
 
-  // Ordena por data/hora da agenda
   clientes.sort((a, b) => a.data.localeCompare(b.data) || a.hora.localeCompare(b.hora));
 
-  const agora = new Date();
+  const agora    = new Date();
   const geradoEm = `${fmtBR(agora.toISOString().split('T')[0])} às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 
   return { clientes, semana: label, geradoEm, totalTarefas, totalComentarios };
@@ -155,34 +153,29 @@ const STATUS_LABEL: Record<string, string> = {
   pendente:  'Pendente',
   andamento: 'Em andamento',
 };
-
 const STATUS_CLASS: Record<string, string> = {
   pendente:  'st-pendente',
   andamento: 'st-andamento',
 };
 
-export function gerarHTMLRelatorio(state: AppState): string {
-  const { clientes, semana, geradoEm, totalTarefas, totalComentarios } = buildRelatorioData(state);
-
-  const hoje = new Date();
-  const geradoData = fmtBR(hoje.toISOString().split('T')[0]);
+export function gerarHTMLRelatorio(state: AppState, de: Date, ate: Date, filtroClienteId = ''): string {
+  const { clientes, semana, geradoEm, totalTarefas, totalComentarios } = buildRelatorioData(state, de, ate, filtroClienteId);
+  const geradoData = fmtBR(new Date().toISOString().split('T')[0]);
 
   const blocosClientes = clientes.map(c => {
-    const inicial = c.nome.charAt(0).toUpperCase();
     const tarefasHTML = c.tarefas.map(t => {
       const comentariosHTML = t.comentarios.length
-        ? `<div class="comentarios-wrap">
-            ${t.comentarios.map(cm => `
-              <div class="comentario-item">
-                <div class="ci-icon">${cm.autorNome.charAt(0).toUpperCase()}</div>
-                <div class="ci-body">
-                  <div class="ci-meta">
-                    <span class="ci-autor">${cm.autorNome}</span>
-                    <span class="ci-data">${fmtDT(cm.at)}</span>
-                  </div>
-                  <div class="ci-txt">${cm.txt}</div>
+        ? `<div class="comentarios-wrap">${t.comentarios.map(cm => `
+            <div class="comentario-item">
+              <div class="ci-icon">${cm.autorNome.charAt(0).toUpperCase()}</div>
+              <div class="ci-body">
+                <div class="ci-meta">
+                  <span class="ci-autor">${cm.autorNome}</span>
+                  <span class="ci-data">${fmtDT(cm.at)}</span>
                 </div>
-              </div>`).join('')}
+                <div class="ci-txt">${cm.txt}</div>
+              </div>
+            </div>`).join('')}
           </div>`
         : `<div class="sem-cmnt">Sem comentários registrados</div>`;
 
@@ -200,7 +193,7 @@ export function gerarHTMLRelatorio(state: AppState): string {
     return `
       <div class="cliente-bloco">
         <div class="cb-header" style="border-left-color:${c.cor}">
-          <div class="cb-inicial" style="background:${c.cor}">${inicial}</div>
+          <div class="cb-inicial" style="background:${c.cor}">${c.nome.charAt(0).toUpperCase()}</div>
           <div class="cb-info">
             <div class="cb-nome">${c.nome}</div>
             <div class="cb-reuniao">📅 ${c.diaNome}, ${c.data}${c.hora ? ' · ' + c.hora : ''}</div>
@@ -216,9 +209,9 @@ export function gerarHTMLRelatorio(state: AppState): string {
 <head>
 <meta charset="UTF-8">
 <style>
-@font-face { font-family:'Isidora Sans'; font-weight:400; src:url('https://db.onlinewebfonts.com/t/5a2997d9cd39bd9d0bc3295b1a73d927.woff2') format('woff2'); }
-@font-face { font-family:'Isidora Sans'; font-weight:600 700; src:url('https://db.onlinewebfonts.com/t/d28024dd0f8248d26a677397a526960d.woff2') format('woff2'); }
-@font-face { font-family:'Isidora Sans'; font-weight:800 900; src:url('https://db.onlinewebfonts.com/t/9ef8ad7b40b9180c8d702347e01437f1.woff2') format('woff2'); }
+@font-face{font-family:'Isidora Sans';font-weight:400;src:url('https://db.onlinewebfonts.com/t/5a2997d9cd39bd9d0bc3295b1a73d927.woff2') format('woff2');}
+@font-face{font-family:'Isidora Sans';font-weight:600 700;src:url('https://db.onlinewebfonts.com/t/d28024dd0f8248d26a677397a526960d.woff2') format('woff2');}
+@font-face{font-family:'Isidora Sans';font-weight:800 900;src:url('https://db.onlinewebfonts.com/t/9ef8ad7b40b9180c8d702347e01437f1.woff2') format('woff2');}
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{--dark:#231F20;--dark2:#2e2a2b;--cyan:#0DDBFF;--cyan2:#0ab8d8;--ivory:#FDFFF4;--muted:#6b6568;--border:#d8dbc8;}
 body{font-family:'Isidora Sans',sans-serif;background:white;color:var(--dark);font-size:13px;line-height:1.5;}
@@ -290,18 +283,9 @@ body{font-family:'Isidora Sans',sans-serif;background:white;color:var(--dark);fo
   <div class="capa-periodo">Semana de ${semana}</div>
   <div class="capa-divider"></div>
   <div class="capa-meta">
-    <div class="capa-meta-item">
-      <div class="capa-meta-num">${clientes.length}</div>
-      <div class="capa-meta-lbl">Clientes</div>
-    </div>
-    <div class="capa-meta-item">
-      <div class="capa-meta-num">${totalTarefas}</div>
-      <div class="capa-meta-lbl">Tarefas</div>
-    </div>
-    <div class="capa-meta-item">
-      <div class="capa-meta-num">${totalComentarios}</div>
-      <div class="capa-meta-lbl">Comentários</div>
-    </div>
+    <div class="capa-meta-item"><div class="capa-meta-num">${clientes.length}</div><div class="capa-meta-lbl">Clientes</div></div>
+    <div class="capa-meta-item"><div class="capa-meta-num">${totalTarefas}</div><div class="capa-meta-lbl">Tarefas</div></div>
+    <div class="capa-meta-item"><div class="capa-meta-num">${totalComentarios}</div><div class="capa-meta-lbl">Comentários</div></div>
   </div>
   <div class="capa-footer">OSTEC SEGURANÇA DIGITAL · GERADO EM ${geradoData.toUpperCase()}</div>
 </div>
@@ -317,12 +301,9 @@ body{font-family:'Isidora Sans',sans-serif;background:white;color:var(--dark);fo
       <div class="ph-gerado">Gerado em ${geradoEm}</div>
     </div>
   </div>
-
   ${clientes.length === 0
-    ? `<div style="text-align:center;padding:40px;color:var(--muted);font-size:14px;">Nenhum cliente com agenda e tarefas abertas na próxima semana.</div>`
-    : blocosClientes
-  }
-
+    ? `<div style="text-align:center;padding:40px;color:var(--muted);font-size:14px;">Nenhum cliente com agenda e tarefas abertas no período selecionado.</div>`
+    : blocosClientes}
   <div class="page-footer">
     <span>OSTEC Segurança Digital — Confidencial</span>
     <span>Semana ${semana}</span>
