@@ -87,7 +87,11 @@ export function buildRelatorioData(
 
 const ST_LABEL: Record<string, string> = { pendente: 'Pendente', andamento: 'Em andamento' };
 
-export function gerarHTMLRelatorio(state: AppState, de: Date, ate: Date, filtroClienteId = ''): string {
+// filename agora é parâmetro obrigatório — passado pelo ModalRelatorio
+export function gerarHTMLRelatorio(
+  state: AppState, de: Date, ate: Date,
+  filtroClienteId = '', filename = 'relatorio.pdf'
+): string {
   const { clientes, semana, geradoEm, totalTarefas, totalComentarios } = buildRelatorioData(state, de, ate, filtroClienteId);
   const geradoData = fmtBR(new Date().toISOString().split('T')[0]);
 
@@ -116,33 +120,13 @@ export function gerarHTMLRelatorio(state: AppState, de: Date, ate: Date, filtroC
     </div>`;
   }).join('');
 
-  // CSS com cores forçadas para impressão e html2canvas
   const css = `
 @font-face{font-family:'IS';font-weight:400;src:url('https://db.onlinewebfonts.com/t/5a2997d9cd39bd9d0bc3295b1a73d927.woff2') format('woff2');}
 @font-face{font-family:'IS';font-weight:700;src:url('https://db.onlinewebfonts.com/t/d28024dd0f8248d26a677397a526960d.woff2') format('woff2');}
 @font-face{font-family:'IS';font-weight:900;src:url('https://db.onlinewebfonts.com/t/9ef8ad7b40b9180c8d702347e01437f1.woff2') format('woff2');}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+html,body{width:794px;max-width:794px;overflow-x:hidden;margin:0;padding:0;font-family:'IS',sans-serif;font-size:13px;line-height:1.5;color:#231F20;background:#231F20;}
 
-/* CORRIGIDO: forçar html e body a 794px para evitar corte pela metade */
-html{
-  width:794px!important;
-  max-width:794px!important;
-  overflow-x:hidden!important;
-}
-body{
-  font-family:'IS',sans-serif;
-  background:#FDFFF4;
-  color:#231F20;
-  font-size:13px;
-  line-height:1.5;
-  width:794px!important;
-  max-width:794px!important;
-  overflow-x:hidden!important;
-  margin:0!important;
-  padding:0!important;
-}
-
-/* CAPA */
 .capa{width:794px;min-height:1123px;background:#231F20!important;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 50px;page-break-after:always;position:relative;overflow:hidden;}
 .capa-top{position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#0DDBFF,#0ab8d8 60%,transparent);}
 .c1{position:absolute;width:500px;height:500px;border-radius:50%;border:1px solid rgba(13,219,255,.1);top:50%;left:50%;transform:translate(-50%,-50%);}
@@ -160,17 +144,14 @@ body{
 .c-lbl{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.35)!important;}
 .c-foot{position:absolute;bottom:30px;left:0;right:0;text-align:center;font-size:10px;color:rgba(255,255,255,.2)!important;letter-spacing:1px;}
 
-/* CONTEÚDO */
 .page{width:794px;min-height:1123px;padding:35px 40px;page-break-after:always;background:#FDFFF4!important;}
 .ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;padding-bottom:14px;border-bottom:2px solid #231F20;}
 .ph-logo{display:flex;}
 .ph-lb{background:#231F20!important;color:#0DDBFF!important;font-weight:900;font-size:13px;padding:5px 9px;border-radius:3px 0 0 3px;}
 .ph-ll{background:rgba(35,31,32,.08)!important;color:#6b6568!important;font-weight:700;font-size:8px;letter-spacing:2px;text-transform:uppercase;padding:5px 8px;border-radius:0 3px 3px 0;border:1px solid #d8dbc8;border-left:none;line-height:1.8;}
 .ph-r{text-align:right;}
-.ph-per{font-size:11px;font-weight:800;}
+.ph-per{font-size:11px;font-weight:800;color:#231F20;}
 .ph-gen{font-size:9px;color:#6b6568;}
-
-/* BLOCOS */
 .cb{margin-bottom:24px;border:1px solid #d8dbc8;border-radius:10px;overflow:hidden;}
 .cb-h{background:#231F20!important;padding:12px 16px;display:flex;align-items:center;gap:12px;}
 .cb-ini{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;color:#231F20!important;flex-shrink:0;}
@@ -200,9 +181,45 @@ body{
 @media print{@page{margin:0;size:A4;}.capa,.page{page-break-after:always;}.cb{break-inside:avoid;}}
 `;
 
+  // Script que roda DENTRO do iframe: carrega html2pdf, gera o PDF e avisa o pai via postMessage
+  const script = `
+(function() {
+  var s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+  s.onload = function() {
+    var opt = {
+      margin: 0,
+      filename: ${JSON.stringify(filename)},
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#231F20',
+        windowWidth: 794,
+        width: 794,
+        scrollX: 0,
+        scrollY: 0,
+      },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['css', 'legacy'] },
+    };
+    window.html2pdf().set(opt).from(document.body).save()
+      .then(function() { window.parent.postMessage('gcv-pdf-done', '*'); })
+      .catch(function(e) { console.error(e); window.parent.postMessage('gcv-pdf-error', '*'); });
+  };
+  s.onerror = function() { window.parent.postMessage('gcv-pdf-error', '*'); };
+  // Aguarda fontes carregarem antes de iniciar
+  setTimeout(function() { document.head.appendChild(s); }, 2000);
+})();
+`;
+
   return `<!DOCTYPE html>
 <html lang="pt-BR">
-<head><meta charset="UTF-8"><style>${css}</style></head>
+<head>
+  <meta charset="UTF-8">
+  <style>${css}</style>
+</head>
 <body>
 
 <div class="capa">
@@ -235,5 +252,6 @@ body{
   </div>
 </div>
 
+<script>${script}<\/script>
 </body></html>`;
 }

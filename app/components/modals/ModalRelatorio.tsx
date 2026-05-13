@@ -27,114 +27,59 @@ export default function ModalRelatorio({ open, onClose, store, showToast }: Prop
 
   async function handleExportar() {
     setGerando(true);
-    let printDiv: HTMLElement | null = null;
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1px;border:none;';
+    document.body.appendChild(iframe);
 
     try {
-      // 1. Carrega html2pdf via CDN (uma só vez por sessão)
-      if (!(window as any).html2pdf) {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-        document.head.appendChild(script);
-        await new Promise((resolve, reject) => {
-          script.onload = resolve;
-          script.onerror = reject;
-        });
-      }
-
-      // 2. Gera o HTML do relatório
-      const html = gerarHTMLRelatorio(store.state, semanaAtual.de, semanaAtual.ate, filtroClienteId);
-
-      // 3. Injeta div diretamente no document principal (sem iframe).
-      //    O html2canvas só renderiza corretamente quando o elemento está no DOM principal
-      //    e usa o window do próprio documento. Iframe cria um contexto separado que quebra
-      //    o cálculo de largura.
-      printDiv = document.createElement('div');
-      printDiv.id = '__gcv_print__';
-      // Posiciona fora da tela mas dentro do DOM real, com largura fixa de 794px (A4 em 96dpi)
-      printDiv.style.cssText = [
-        'position:fixed',
-        'left:-9999px',
-        'top:0',
-        'width:794px',
-        'max-width:794px',
-        'height:auto',
-        'overflow:visible',
-        'z-index:-9999',
-        'pointer-events:none',
-      ].join(';');
-
-      // innerHTML recebe apenas o conteúdo do <body> do HTML gerado para
-      // evitar conflito entre dois <html>/<body> no mesmo documento.
-      // Extraímos o conteúdo interno do <body>:
-      const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-      printDiv.innerHTML = bodyMatch ? bodyMatch[1] : html;
-
-      // Injeta também o <style> do relatório para garantir que as classes existam
-      const styleMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
-      if (styleMatch) {
-        const styleEl = document.createElement('style');
-        styleEl.id = '__gcv_print_style__';
-        styleEl.textContent = styleMatch[1];
-        document.head.appendChild(styleEl);
-      }
-
-      document.body.appendChild(printDiv);
-
-      // Aguarda fontes e renders
-      await new Promise(r => setTimeout(r, 2000));
-
       const nomeCliente = filtroClienteId
         ? store.state.clientes.find(c => c.id === filtroClienteId)?.nome?.replace(/\s+/g, '_') || 'cliente'
         : 'todos';
       const semanaLabel = `semana${semanaIdx + 1}`;
       const filename = `GCV_Relatorio_${nomeCliente}_${semanaLabel}.pdf`;
 
-      const opt = {
-        margin: 0,
+      // Gera o HTML do relatório — inclui o script do html2pdf e chama window.print() de dentro
+      const html = gerarHTMLRelatorio(
+        store.state, semanaAtual.de, semanaAtual.ate, filtroClienteId,
         filename,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: '#231F20',
-          windowWidth: 794,
-          width: 794,
-          scrollX: 0,
-          scrollY: 0,
-          onclone: (clonedDoc: Document) => {
-            const el = clonedDoc.getElementById('__gcv_print__');
-            if (el) {
-              el.style.left = '0';
-              el.style.position = 'relative';
-              el.style.zIndex = '1';
-            }
-          },
-        },
-        jsPDF: {
-          unit: 'mm',
-          format: 'a4',
-          orientation: 'portrait',
-        },
-        pagebreak: { mode: ['css', 'legacy'] },
-      };
+      );
 
-      // @ts-ignore
-      await (window as any).html2pdf().set(opt).from(printDiv).save();
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (!iframeDoc) throw new Error('Sem acesso ao iframe');
 
+      iframeDoc.open();
+      iframeDoc.write(html);
+      iframeDoc.close();
+
+      // Aguarda o script interno do iframe terminar e disparar o evento 'gcv-pdf-done'
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Timeout ao gerar PDF')), 30000);
+
+        // O HTML gerado dispara window.parent.postMessage quando termina
+        const handler = (e: MessageEvent) => {
+          if (e.data === 'gcv-pdf-done') {
+            clearTimeout(timeout);
+            window.removeEventListener('message', handler);
+            resolve();
+          }
+          if (e.data === 'gcv-pdf-error') {
+            clearTimeout(timeout);
+            window.removeEventListener('message', handler);
+            reject(new Error('Erro interno no iframe'));
+          }
+        };
+        window.addEventListener('message', handler);
+      });
+
+      showToast('PDF baixado ✓');
+      onClose();
     } catch (err) {
       console.error(err);
       showToast('Erro ao gerar PDF');
     } finally {
-      // Limpeza garantida
-      if (printDiv && document.body.contains(printDiv)) document.body.removeChild(printDiv);
-      const styleEl = document.getElementById('__gcv_print_style__');
-      if (styleEl) styleEl.remove();
+      if (document.body.contains(iframe)) document.body.removeChild(iframe);
       setGerando(false);
     }
-
-    showToast('PDF baixado ✓');
-    onClose();
   }
 
   const lbl = (txt: string) => (
