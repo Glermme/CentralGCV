@@ -11,20 +11,19 @@ interface Props {
   showToast: (msg: string) => void;
 }
 
-type FormTab    = 'recorrente' | 'extra' | 'scan';
-type FiltroTipo = 'todos' | 'reunioes' | 'extras' | 'scans';
+type FormTab    = 'recorrente' | 'extra' | 'scan' | 'recheck';
+type FiltroTipo = 'todos' | 'reunioes' | 'extras' | 'scans' | 'recheks';
 
 export default function Agenda({ store, showToast }: Props) {
-  const { state, setOcorrencia, addAgenda, delAgenda, addAgendaExtra, delAgendaExtra, setAgendaExtraStatus, addScan, delScan, setScanStatus } = store;
+  const { state, setOcorrencia, addAgenda, delAgenda, addAgendaExtra, delAgendaExtra, setAgendaExtraStatus, addScan, delScan, setScanStatus, addRecheck, delRecheck, setRechekStatus } = store;
 
   const [showForm,   setShowForm]   = useState(false);
   const [formTab,    setFormTab]    = useState<FormTab>('recorrente');
   const [filtro,     setFiltro]     = useState<FiltroTipo>('todos');
   const [motivoKey,  setMotivoKey]  = useState<string | null>(null);
-  const [motivoTipo, setMotivoTipo] = useState<'recorrente' | 'extra' | 'scan'>('recorrente');
+  const [motivoTipo, setMotivoTipo] = useState<'recorrente' | 'extra' | 'scan' | 'recheck'>('recorrente');
   const [motivoTxt,  setMotivoTxt]  = useState('');
 
-  // ModalConfirm
   const [confirm, setConfirm] = useState<{ titulo: string; mensagem: string; onOk: () => void } | null>(null);
 
   function askConfirm(titulo: string, mensagem: string, onOk: () => void) {
@@ -35,24 +34,29 @@ export default function Agenda({ store, showToast }: Props) {
   const [agCl, setAgCl] = useState(''); const [agOcorr, setAgOcorr] = useState(2); const [agDia, setAgDia] = useState(2); const [agHora, setAgHora] = useState('14:00'); const [agObs, setAgObs] = useState('');
   const [exCl, setExCl] = useState(''); const [exData, setExData] = useState(''); const [exHora, setExHora] = useState('14:00'); const [exDurH, setExDurH] = useState('01'); const [exDurM, setExDurM] = useState('00'); const [exDesc, setExDesc] = useState('');
   const [scCl, setScCl] = useState(''); const [scOcorr, setScOcorr] = useState(1); const [scDia, setScDia] = useState(6); const [scHora, setScHora] = useState('10:00'); const [scObs, setScObs] = useState('');
+  const [rcCl, setRcCl] = useState(''); const [rcData, setRcData] = useState(''); const [rcHora, setRcHora] = useState('14:00'); const [rcDurH, setRcDurH] = useState('01'); const [rcDurM, setRcDurM] = useState('00'); const [rcDesc, setRcDesc] = useState('');
 
   const hoje = new Date();
   const em8  = new Date(hoje); em8.setDate(hoje.getDate() + 56);
 
-  const slots     = getAgendaSlots(state.agendas, hoje, em8).sort((a, b) => a.date.getTime() - b.date.getTime() || a.hora.localeCompare(b.hora));
-  const scanSlots = getScanSlots(state.scans, hoje, em8).sort((a, b) => a.date.getTime() - b.date.getTime() || a.hora.localeCompare(b.hora));
-  const extrasNoPeriodo = state.agendasExtras.filter(e => e.data >= fmtDate(hoje) && e.data <= fmtDate(em8)).sort((a, b) => a.data.localeCompare(b.data) || a.hora.localeCompare(b.hora));
+  const slots              = getAgendaSlots(state.agendas, hoje, em8).sort((a, b) => a.date.getTime() - b.date.getTime() || a.hora.localeCompare(b.hora));
+  const scanSlots          = getScanSlots(state.scans, hoje, em8).sort((a, b) => a.date.getTime() - b.date.getTime() || a.hora.localeCompare(b.hora));
+  const extrasNoPeriodo    = state.agendasExtras.filter(e => e.data >= fmtDate(hoje) && e.data <= fmtDate(em8)).sort((a, b) => a.data.localeCompare(b.data) || a.hora.localeCompare(b.hora));
+  const recheksNoPeriodo   = state.recheks.filter(r => r.data >= fmtDate(hoje) && r.data <= fmtDate(em8)).sort((a, b) => a.data.localeCompare(b.data) || a.hora.localeCompare(b.hora));
 
-  const porData: Record<string, { recorrentes: typeof slots; extras: typeof extrasNoPeriodo; scans: typeof scanSlots }> = {};
+  const porData: Record<string, { recorrentes: typeof slots; extras: typeof extrasNoPeriodo; scans: typeof scanSlots; recheks: typeof recheksNoPeriodo }> = {};
 
   if (filtro === 'todos' || filtro === 'reunioes') {
-    slots.forEach(s => { const k = fmtDate(s.date); if (!porData[k]) porData[k] = { recorrentes: [], extras: [], scans: [] }; porData[k].recorrentes.push(s); });
+    slots.forEach(s => { const k = fmtDate(s.date); if (!porData[k]) porData[k] = { recorrentes: [], extras: [], scans: [], recheks: [] }; porData[k].recorrentes.push(s); });
   }
   if (filtro === 'todos' || filtro === 'extras') {
-    extrasNoPeriodo.forEach(e => { if (!porData[e.data]) porData[e.data] = { recorrentes: [], extras: [], scans: [] }; porData[e.data].extras.push(e); });
+    extrasNoPeriodo.forEach(e => { if (!porData[e.data]) porData[e.data] = { recorrentes: [], extras: [], scans: [], recheks: [] }; porData[e.data].extras.push(e); });
   }
   if (filtro === 'todos' || filtro === 'scans') {
-    scanSlots.forEach(s => { const k = fmtDate(s.date); if (!porData[k]) porData[k] = { recorrentes: [], extras: [], scans: [] }; porData[k].scans.push(s); });
+    scanSlots.forEach(s => { const k = fmtDate(s.date); if (!porData[k]) porData[k] = { recorrentes: [], extras: [], scans: [], recheks: [] }; porData[k].scans.push(s); });
+  }
+  if (filtro === 'todos' || filtro === 'recheks') {
+    recheksNoPeriodo.forEach(r => { if (!porData[r.data]) porData[r.data] = { recorrentes: [], extras: [], scans: [], recheks: [] }; porData[r.data].recheks.push(r); });
   }
 
   const datasOrdenadas = Object.keys(porData).sort();
@@ -73,17 +77,24 @@ export default function Agenda({ store, showToast }: Props) {
     addScan({ clienteId: scCl, ocorrencia: scOcorr as any, diaSemana: scDia as any, hora: scHora, obs: scObs });
     setShowForm(false); setScCl(''); setScObs(''); showToast('Scan adicionado ✓');
   }
+  function handleSaveRecheck() {
+    if (!rcCl || !rcData) { showToast('Preencha cliente e data'); return; }
+    addRecheck({ clienteId: rcCl, data: rcData, hora: rcHora, duracao: `${rcDurH.padStart(2,'0')}:${rcDurM.padStart(2,'0')}`, descricao: rcDesc });
+    setShowForm(false); setRcCl(''); setRcData(''); setRcDesc(''); showToast('Recheck adicionado ✓');
+  }
   function handleSaveMotivo() {
     if (!motivoKey) return;
     if (motivoTipo === 'recorrente') { const [agId, dt] = motivoKey.split('_'); setOcorrencia(agId, dt, 'nao', motivoTxt); }
     else if (motivoTipo === 'extra') { setAgendaExtraStatus(motivoKey, 'nao', motivoTxt); }
-    else { const [scanId, dt] = motivoKey.split('_'); setScanStatus(scanId, dt, 'nao', motivoTxt); }
+    else if (motivoTipo === 'scan')  { const [scanId, dt] = motivoKey.split('_'); setScanStatus(scanId, dt, 'nao', motivoTxt); }
+    else                             { setRechekStatus(motivoKey, 'nao', motivoTxt); }
     setMotivoKey(null); setMotivoTxt(''); showToast('Motivo salvo');
   }
 
   const tagRecorrente = <span style={{ padding: '2px 7px', borderRadius: 3, fontSize: 9, fontWeight: 800, letterSpacing: .5, textTransform: 'uppercase', background: 'var(--cyan-soft)', color: 'var(--cyan)', border: '1px solid rgba(13,219,255,.3)' }}>Reunião</span>;
   const tagExtra = (dur?: string) => <span style={{ padding: '2px 7px', borderRadius: 3, fontSize: 9, fontWeight: 800, letterSpacing: .5, textTransform: 'uppercase', background: 'rgba(232,48,48,.1)', color: 'var(--danger)', border: '1px solid rgba(232,48,48,.2)' }}>Extra{dur ? ` · ${dur}` : ''}</span>;
   const tagScan = <span style={{ padding: '2px 7px', borderRadius: 3, fontSize: 9, fontWeight: 800, letterSpacing: .5, textTransform: 'uppercase', background: 'rgba(232,131,10,.1)', color: 'var(--warn)', border: '1px solid rgba(232,131,10,.2)' }}>Scan</span>;
+  const tagRecheck = (dur?: string) => <span style={{ padding: '2px 7px', borderRadius: 3, fontSize: 9, fontWeight: 800, letterSpacing: .5, textTransform: 'uppercase', background: 'rgba(124,58,237,.1)', color: '#7c3aed', border: '1px solid rgba(124,58,237,.2)' }}>Recheck{dur ? ` · ${dur}` : ''}</span>;
   const inp = { width: '100%', padding: '9px 12px', border: '1px solid var(--border)', borderRadius: 5, fontFamily: 'inherit', fontSize: 12, marginBottom: 10, background: 'white', outline: 'none' };
   const diasScan = [{ v:1,l:'Segunda'},{v:2,l:'Terça'},{v:3,l:'Quarta'},{v:4,l:'Quinta'},{v:5,l:'Sexta'},{v:6,l:'Sábado'},{v:7,l:'Domingo'}];
 
@@ -92,7 +103,12 @@ export default function Agenda({ store, showToast }: Props) {
     { id: 'reunioes', label: 'Reuniões', color: 'var(--cyan)'   },
     { id: 'extras',   label: 'Extras',   color: 'var(--danger)' },
     { id: 'scans',    label: 'Scans',    color: 'var(--warn)'   },
+    { id: 'recheks',  label: 'Recheks',  color: '#7c3aed'       },
   ];
+
+  const motivoColor = motivoTipo === 'recheck' ? '#7c3aed' : motivoTipo === 'scan' ? 'var(--warn)' : motivoTipo === 'extra' ? 'var(--danger)' : 'var(--cyan)';
+  const motivoColorDim = motivoTipo === 'recheck' ? '#7c3aed' : motivoTipo === 'scan' ? 'var(--warn)' : motivoTipo === 'extra' ? 'var(--danger)' : 'var(--cyan-dim)';
+  const motivoBtnStyle = { background: motivoColor, color: motivoTipo === 'recorrente' ? 'var(--dark)' : 'white', border: 'none', borderRadius: 6, padding: 13, fontFamily: 'inherit', fontWeight: 800, fontSize: 13, cursor: 'pointer', textTransform: 'uppercase' as const, width: '100%' };
 
   return (
     <>
@@ -117,7 +133,7 @@ export default function Agenda({ store, showToast }: Props) {
         {showForm && (
           <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: 10, padding: 16, marginBottom: 14 }}>
             <div style={{ display: 'flex', gap: 0, marginBottom: 16, border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
-              {([['recorrente','⟳ Reunião','var(--cyan)'],['extra','+ Extra','var(--danger)'],['scan','🔍 Scan','var(--warn)']] as [FormTab,string,string][]).map(([tab,label,color]) => (
+              {([['recorrente','⟳ Reunião','var(--cyan)'],['extra','+ Extra','var(--danger)'],['scan','🔍 Scan','var(--warn)'],['recheck','↺ Recheck','#7c3aed']] as [FormTab,string,string][]).map(([tab,label,color]) => (
                 <button key={tab} onClick={() => setFormTab(tab)} style={{ flex: 1, padding: '8px', fontFamily: 'inherit', fontWeight: 800, fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer', border: 'none', background: formTab === tab ? 'var(--dark)' : 'white', color: formTab === tab ? color : 'var(--muted)' }}>{label}</button>
               ))}
             </div>
@@ -174,18 +190,39 @@ export default function Agenda({ store, showToast }: Props) {
                 </div>
               </>
             )}
+
+            {formTab === 'recheck' && (
+              <>
+                <select value={rcCl} onChange={e => setRcCl(e.target.value)} style={inp as any}><option value="">Cliente...</option>{state.clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}</select>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                  <input type="date" value={rcData} onChange={e => setRcData(e.target.value)} style={{ ...inp, flex:1, marginBottom:0 } as any} />
+                  <input type="time" value={rcHora} onChange={e => setRcHora(e.target.value)} style={{ ...inp, flex:1, marginBottom:0 } as any} />
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+                  <input type="number" min="0" max="23" value={rcDurH} onChange={e => setRcDurH(e.target.value.padStart(2,'0'))} style={{ width:70, padding:'9px 12px', border:'1px solid var(--border)', borderRadius:5, fontFamily:'inherit', fontSize:12, background:'white', textAlign:'center', outline:'none' }} />
+                  <span style={{ fontWeight:800, color:'var(--muted)', fontSize:13 }}>h</span>
+                  <input type="number" min="0" max="59" step="5" value={rcDurM} onChange={e => setRcDurM(e.target.value.padStart(2,'0'))} style={{ width:70, padding:'9px 12px', border:'1px solid var(--border)', borderRadius:5, fontFamily:'inherit', fontSize:12, background:'white', textAlign:'center', outline:'none' }} />
+                  <span style={{ fontWeight:800, color:'var(--muted)', fontSize:13 }}>min</span>
+                </div>
+                <input type="text" value={rcDesc} onChange={e => setRcDesc(e.target.value)} placeholder="Descrição (opcional)" style={inp as any} />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={handleSaveRecheck} style={{ background: '#7c3aed', color: 'white', border: 'none', borderRadius: 5, padding: '9px 18px', fontFamily: 'inherit', fontWeight: 800, fontSize: 11, cursor: 'pointer', textTransform: 'uppercase' }}>Salvar Recheck</button>
+                  <button onClick={() => setShowForm(false)} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 5, padding: '9px 14px', fontFamily: 'inherit', fontWeight: 700, fontSize: 11, cursor: 'pointer', color: 'var(--muted)' }}>Cancelar</button>
+                </div>
+              </>
+            )}
           </div>
         )}
 
         {/* Lista */}
         {datasOrdenadas.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 30, color: 'var(--muted)', fontSize: 13 }}>
-            {filtro === 'todos' ? 'Nenhuma agenda. Clique em + Adicionar.' : `Nenhum(a) ${filtro === 'reunioes' ? 'reunião' : filtro === 'extras' ? 'agenda extra' : 'scan'} nos próximos 2 meses.`}
+            {filtro === 'todos' ? 'Nenhuma agenda. Clique em + Adicionar.' : `Nenhum(a) ${filtro === 'reunioes' ? 'reunião' : filtro === 'extras' ? 'agenda extra' : filtro === 'scans' ? 'scan' : 'recheck'} nos próximos 2 meses.`}
           </div>
         ) : (
           datasOrdenadas.map(dt => {
-            const { recorrentes, extras, scans: scansNoDia } = porData[dt];
-            const total = recorrentes.length + extras.length + scansNoDia.length;
+            const { recorrentes, extras, scans: scansNoDia, recheks: recheksNoDia } = porData[dt];
+            const total = recorrentes.length + extras.length + scansNoDia.length + recheksNoDia.length;
             const d = new Date(dt + 'T12:00:00');
             return (
               <div key={dt} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 10, overflow: 'hidden', boxShadow: '0 1px 4px rgba(35,31,32,.06)' }}>
@@ -260,6 +297,27 @@ export default function Agenda({ store, showToast }: Props) {
                     </div>
                   );
                 })}
+
+                {recheksNoDia.map(r => {
+                  const c = state.clientes.find(x => x.id === r.clienteId); if (!c) return null;
+                  const bg = r.status === 'ocorreu' ? 'white' : r.status === 'nao' ? '#fff5f5' : '#faf5ff';
+                  return (
+                    <div key={r.id} style={{ display: 'flex', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--border)', gap: 12, background: bg }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: '#7c3aed', flexShrink: 0, width: 42 }}>{r.hora}</div>
+                      <div style={{ width: 9, height: 9, borderRadius: '50%', background: c.cor, flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>{c.nome} {tagRecheck(r.duracao)}</div>
+                        {r.descricao && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{r.descricao}</div>}
+                        {r.motivo && <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 3, fontStyle: 'italic' }}>✗ {r.motivo}</div>}
+                      </div>
+                      <div style={{ display: 'flex', gap: 5 }}>
+                        <button onClick={() => { setRechekStatus(r.id, 'ocorreu', ''); showToast('Recheck executado ✓'); }} style={{ padding: '4px 10px', borderRadius: 4, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: '1.5px solid var(--success)', background: r.status === 'ocorreu' ? 'var(--success)' : 'none', color: r.status === 'ocorreu' ? 'white' : 'var(--success)' }}>✓</button>
+                        <button onClick={() => { setMotivoKey(r.id); setMotivoTipo('recheck'); setMotivoTxt(r.motivo || ''); }} style={{ padding: '4px 10px', borderRadius: 4, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: '1.5px solid var(--danger)', background: r.status === 'nao' ? 'var(--danger)' : 'none', color: r.status === 'nao' ? 'white' : 'var(--danger)' }}>✗</button>
+                        <button onClick={() => askConfirm('Remover recheck', `Remover recheck de ${c.nome}?`, () => { delRecheck(r.id); showToast('Removido'); })} style={{ padding: '4px 8px', borderRadius: 4, fontSize: 10, cursor: 'pointer', border: '1px solid var(--border)', background: 'none', color: 'var(--muted)' }}>🗑</button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             );
           })
@@ -268,13 +326,13 @@ export default function Agenda({ store, showToast }: Props) {
         {/* Modal motivo */}
         {motivoKey && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(35,31,32,.75)', zIndex: 500, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backdropFilter: 'blur(3px)' }} onClick={e => { if (e.target === e.currentTarget) setMotivoKey(null); }}>
-            <div style={{ background: 'var(--ivory)', borderRadius: '16px 16px 0 0', padding: '22px 20px 28px', width: '100%', maxWidth: 660, borderTop: `2.5px solid ${motivoTipo === 'scan' ? 'var(--warn)' : motivoTipo === 'extra' ? 'var(--danger)' : 'var(--cyan)'}` }}>
+            <div style={{ background: 'var(--ivory)', borderRadius: '16px 16px 0 0', padding: '22px 20px 28px', width: '100%', maxWidth: 660, borderTop: `2.5px solid ${motivoColor}` }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-                <div style={{ fontWeight: 800, fontSize: 17 }}>Motivo <span style={{ color: motivoTipo === 'scan' ? 'var(--warn)' : motivoTipo === 'extra' ? 'var(--danger)' : 'var(--cyan-dim)' }}>Não Ocorreu</span></div>
+                <div style={{ fontWeight: 800, fontSize: 17 }}>Motivo <span style={{ color: motivoColorDim }}>Não Ocorreu</span></div>
                 <button onClick={() => setMotivoKey(null)} style={{ background: 'var(--ivory2)', border: '1px solid var(--border)', borderRadius: 5, width: 30, height: 30, cursor: 'pointer', color: 'var(--muted)', fontSize: 14 }}>✕</button>
               </div>
               <textarea rows={3} value={motivoTxt} onChange={e => setMotivoTxt(e.target.value)} placeholder="Ex: sistema indisponível, cliente cancelou..." style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'inherit', fontSize: 13, outline: 'none', background: 'white', marginBottom: 12, resize: 'none' }} />
-              <button onClick={handleSaveMotivo} style={{ width: '100%', background: motivoTipo === 'scan' ? 'var(--warn)' : motivoTipo === 'extra' ? 'var(--danger)' : 'var(--cyan-dim)', color: motivoTipo === 'scan' || motivoTipo === 'extra' ? 'white' : 'var(--dark)', border: 'none', borderRadius: 6, padding: 13, fontFamily: 'inherit', fontWeight: 800, fontSize: 13, cursor: 'pointer', textTransform: 'uppercase' }}>Salvar</button>
+              <button onClick={handleSaveMotivo} style={motivoBtnStyle}>Salvar</button>
             </div>
           </div>
         )}

@@ -5,7 +5,7 @@
 import { supabase } from '@/lib/supabase';
 import type {
   AppState, Cliente, Tarefa, Reuniao,
-  AgendaRecorrente, AgendaExtra, Comentario, Scan,
+  AgendaRecorrente, AgendaExtra, Comentario, Scan, Recheck,
 } from '@/lib/store';
 
 // ── LOGS ───────────────────────────────────
@@ -38,7 +38,7 @@ function mapState(
   clientes: any[], reunioes: any[], tarefas: any[],
   comentariosRaw: any[], agendas: any[], ocorrencias: any[],
   extras: any[], perfis: any[], anexos: any[],
-  scans: any[], scanOcorrencias: any[]
+  scans: any[], scanOcorrencias: any[], recheks: any[]
 ): AppState {
   const perfilMap: Record<string, { nome: string; avatar: string }> = {};
   perfis.forEach((p: any) => {
@@ -81,6 +81,7 @@ function mapState(
     agendas: (agendas || []).map((a: any): AgendaRecorrente => ({ id: a.id, clienteId: a.cliente_id, ocorrencia: a.ocorrencia, diaSemana: a.dia_semana, hora: a.hora, obs: a.obs })),
     agendasExtras: (extras || []).map((e: any) => ({ id: e.id, clienteId: e.cliente_id, ownerId: e.owner_id, data: e.data, hora: e.hora, duracao: e.duracao, descricao: e.descricao, status: e.status, motivo: e.motivo, criadoEm: e.criado_em })),
     scans: (scans || []).map((s: any): Scan => ({ id: s.id, clienteId: s.cliente_id, ocorrencia: s.ocorrencia, diaSemana: s.dia_semana, hora: s.hora, obs: s.obs })),
+    recheks: (recheks || []).map((r: any): Recheck => ({ id: r.id, clienteId: r.cliente_id, ownerId: r.owner_id, data: r.data, hora: r.hora, duracao: r.duracao, descricao: r.descricao, status: r.status, motivo: r.motivo, criadoEm: r.criado_em })),
     scanOcorrencias: scanOcorrenciasMap,
     ocorrencias: ocorrenciasMap,
     colorIdx: 0,
@@ -94,7 +95,7 @@ export async function loadFromDB(): Promise<AppState> {
     { data: clientes }, { data: reunioes }, { data: tarefas },
     { data: comentariosRaw }, { data: agendas }, { data: ocorrencias },
     { data: extras }, { data: perfis }, { data: anexos },
-    { data: scans }, { data: scanOcorrencias },
+    { data: scans }, { data: scanOcorrencias }, { data: recheks },
   ] = await Promise.all([
     supabase.from('clientes').select('*').order('criado_em'),
     supabase.from('reunioes').select('*').order('criado_em'),
@@ -107,9 +108,10 @@ export async function loadFromDB(): Promise<AppState> {
     supabase.from('comentario_anexos').select('*'),
     supabase.from('scans').select('*').order('criado_em'),
     supabase.from('scan_ocorrencias').select('*'),
+    supabase.from('recheks').select('*').order('data').order('hora'),
   ]);
 
-  return mapState(clientes||[], reunioes||[], tarefas||[], comentariosRaw||[], agendas||[], ocorrencias||[], extras||[], perfis||[], anexos||[], scans||[], scanOcorrencias||[]);
+  return mapState(clientes||[], reunioes||[], tarefas||[], comentariosRaw||[], agendas||[], ocorrencias||[], extras||[], perfis||[], anexos||[], scans||[], scanOcorrencias||[], recheks||[]);
 }
 
 export async function loadAllFromDB(): Promise<AppState> { return loadFromDB(); }
@@ -203,6 +205,17 @@ export async function dbDelScan(id: string) {
 }
 export async function dbSetScanStatus(scanId: string, data: string, status: string, motivo: string) {
   await supabase.from('scan_ocorrencias').upsert({ scan_id: scanId, data, status, motivo }, { onConflict: 'scan_id,data' });
+}
+
+// ── RECHEKS ────────────────────────────────
+export async function dbAddRecheck(r: Recheck, ownerId: string) {
+  await supabase.from('recheks').insert({ id: r.id, cliente_id: r.clienteId, owner_id: ownerId, data: r.data, hora: r.hora, duracao: r.duracao, descricao: r.descricao, status: '', motivo: '' });
+}
+export async function dbDelRecheck(id: string) {
+  await supabase.from('recheks').delete().eq('id', id);
+}
+export async function dbSetRechekStatus(id: string, status: string, motivo: string) {
+  await supabase.from('recheks').update({ status, motivo }).eq('id', id);
 }
 
 // ── OCORRÊNCIAS ────────────────────────────

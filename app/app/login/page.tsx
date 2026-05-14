@@ -71,7 +71,7 @@ export default function Login() {
               <span style={{
                 fontSize: 13, fontWeight: 500, color: 'white',
                 letterSpacing: 2, whiteSpace: 'nowrap',
-              }}>Portal GCV</span>
+              }}>Central GCV</span>
               <div style={{ width: 48, height: 1, background: 'linear-gradient(to left, transparent, #0DDBFF88)' }} />
             </div>
 

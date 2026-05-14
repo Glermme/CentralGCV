@@ -64,6 +64,19 @@ export interface AgendaExtra {
   criadoEm:  string;
 }
 
+export interface Recheck {
+  id:        string;
+  clienteId: string;
+  ownerId:   string;
+  data:      string;
+  hora:      string;
+  duracao:   string;
+  descricao: string;
+  status:    string;
+  motivo:    string;
+  criadoEm:  string;
+}
+
 export interface Scan {
   id:         string;
   clienteId:  string;
@@ -89,6 +102,7 @@ export interface AppState {
   reunioes:       Reuniao[];
   agendas:        AgendaRecorrente[];
   agendasExtras:  AgendaExtra[];
+  recheks:        Recheck[];
   scans:          Scan[];
   scanOcorrencias: Record<string, ScanOcorrencia>; // key: scanId_data
   ocorrencias:    Record<string, OcorrenciaStatus>;
@@ -161,7 +175,7 @@ export function hslToHex(h: number, s: number, l: number): string {
 export function buildDemoState(): AppState {
   return {
     clientes: [], tarefas: [], reunioes: [],
-    agendas: [], agendasExtras: [],
+    agendas: [], agendasExtras: [], recheks: [],
     scans: [], scanOcorrencias: {},
     ocorrencias: {}, colorIdx: 0,
   };
@@ -175,6 +189,7 @@ export function loadState(): AppState {
     const parsed = JSON.parse(raw) as AppState;
     if (!parsed.agendas)          parsed.agendas          = [];
     if (!parsed.agendasExtras)    parsed.agendasExtras    = [];
+    if (!parsed.recheks)          parsed.recheks          = [];
     if (!parsed.scans)            parsed.scans            = [];
     if (!parsed.scanOcorrencias)  parsed.scanOcorrencias  = {};
     if (!parsed.ocorrencias)      parsed.ocorrencias      = {};

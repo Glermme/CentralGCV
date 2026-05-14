@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { StoreAPI } from '@/hooks/useStore';
+import { getAgendaSlots } from '@/lib/agenda';
 
 interface Props {
   open: boolean;
@@ -12,10 +13,29 @@ interface Props {
 
 export default function ModalTarefa({ open, onClose, store, showToast }: Props) {
   const { state, addTarefa } = store;
-  const [cid,    setCid]    = useState('');
-  const [desc,   setDesc]   = useState('');
-  const [prazo,  setPrazo]  = useState('');
-  const [status, setStatus] = useState<'pendente' | 'andamento'>('pendente');
+  const [cid,        setCid]        = useState('');
+  const [desc,       setDesc]       = useState('');
+  const [prazo,      setPrazo]      = useState('');
+  const [prazoHint,  setPrazoHint]  = useState('');
+  const [status,     setStatus]     = useState<'pendente' | 'andamento'>('pendente');
+
+  useEffect(() => {
+    const clienteId = cid || state.clientes[0]?.id;
+    if (!clienteId) { setPrazoHint(''); return; }
+    const agCl = state.agendas.filter(a => a.clienteId === clienteId);
+    if (!agCl.length) { setPrazoHint(''); return; }
+    const from = new Date();
+    const to = new Date(); to.setDate(from.getDate() + 90);
+    const slots = getAgendaSlots(agCl, from, to).sort((a, b) => a.date.getTime() - b.date.getTime());
+    if (slots[0]) {
+      const iso = slots[0].date.toISOString().split('T')[0];
+      setPrazo(iso);
+      const [y, m, d] = iso.split('-');
+      setPrazoHint(`Próxima agenda: ${d}/${m}/${y}`);
+    } else {
+      setPrazoHint('');
+    }
+  }, [cid, state.agendas, state.clientes]);
 
   if (!open) return null;
 
@@ -49,7 +69,8 @@ export default function ModalTarefa({ open, onClose, store, showToast }: Props) 
         <textarea rows={3} value={desc} onChange={e => setDesc(e.target.value)} placeholder="O que precisa ser feito..." style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'inherit', fontSize: 13, outline: 'none', background: 'white', marginBottom: 12, resize: 'none' }} />
 
         <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 5 }}>Prazo</label>
-        <input type="date" value={prazo} onChange={e => setPrazo(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'inherit', fontSize: 13, outline: 'none', background: 'white', marginBottom: 12 }} />
+        <input type="date" value={prazo} onChange={e => { setPrazo(e.target.value); setPrazoHint(''); }} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'inherit', fontSize: 13, outline: 'none', background: 'white', marginBottom: prazoHint ? 4 : 12 }} />
+        {prazoHint && <div style={{ fontSize: 11, color: 'var(--cyan-dim)', marginBottom: 10, fontWeight: 600 }}>📅 {prazoHint}</div>}
 
         <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 5 }}>Status</label>
         <select value={status} onChange={e => setStatus(e.target.value as any)} style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'inherit', fontSize: 13, background: 'white', marginBottom: 12 }}>

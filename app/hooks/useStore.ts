@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import {
-  AppState, Tarefa, Cliente, AgendaRecorrente, AgendaExtra, Scan,
+  AppState, Tarefa, Cliente, AgendaRecorrente, AgendaExtra, Scan, Recheck,
   loadState, saveState, uid, hslToHex,
 } from '@/lib/store';
 import {
@@ -14,6 +14,7 @@ import {
   dbAddAgenda, dbDelAgenda,
   dbAddAgendaExtra, dbDelAgendaExtra, dbSetAgendaExtraStatus,
   dbAddScan, dbDelScan, dbSetScanStatus,
+  dbAddRecheck, dbDelRecheck, dbSetRechekStatus,
   dbSetOcorrencia,
 } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
@@ -240,6 +241,28 @@ export function useStore() {
     update(s => ({ ...s, scanOcorrencias: { ...s.scanOcorrencias, [key]: { status, motivo: status === 'ocorreu' ? '' : motivo } } }));
   }, [update, log]);
 
+  // ── RECHEKS ───────────────────────────────
+  const addRecheck = useCallback(async (recheck: Omit<Recheck, 'id' | 'ownerId' | 'status' | 'motivo' | 'criadoEm'>) => {
+    if (!userId) return;
+    const nova: Recheck = { id: uid(), ownerId: userId, status: '', motivo: '', criadoEm: new Date().toISOString(), ...recheck };
+    await dbAddRecheck(nova, userId);
+    const clienteNome = state.clientes.find(c => c.id === recheck.clienteId)?.nome || '';
+    log('criar', 'recheck', nova.id, `${clienteNome} ${recheck.data} ${recheck.hora}`);
+    update(s => ({ ...s, recheks: [...s.recheks, nova] }));
+  }, [update, userId, state.clientes, log]);
+
+  const delRecheck = useCallback(async (id: string) => {
+    await dbDelRecheck(id);
+    log('excluir', 'recheck', id);
+    update(s => ({ ...s, recheks: s.recheks.filter(r => r.id !== id) }));
+  }, [update, log]);
+
+  const setRechekStatus = useCallback(async (id: string, status: string, motivo = '') => {
+    await dbSetRechekStatus(id, status, motivo);
+    log('status', 'recheck', id, `→ ${status}${motivo ? ': ' + motivo : ''}`);
+    update(s => ({ ...s, recheks: s.recheks.map(r => r.id === id ? { ...r, status, motivo } : r) }));
+  }, [update, log]);
+
   // ── OCORRÊNCIAS ──────────────────────────
   const setOcorrencia = useCallback(async (agendaId: string, date: string, status: 'ocorreu' | 'nao', motivo = '') => {
     await dbSetOcorrencia(agendaId, date, status, motivo);
@@ -278,6 +301,7 @@ export function useStore() {
     addAgenda, delAgenda,
     addAgendaExtra, delAgendaExtra, setAgendaExtraStatus,
     addScan, delScan, setScanStatus,
+    addRecheck, delRecheck, setRechekStatus,
     setOcorrencia, randomColor, logout,
   };
 }
