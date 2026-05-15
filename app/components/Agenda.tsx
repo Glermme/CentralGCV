@@ -25,6 +25,7 @@ export default function Agenda({ store, showToast }: Props) {
   const [motivoTxt,  setMotivoTxt]  = useState('');
 
   const [confirm, setConfirm] = useState<{ titulo: string; mensagem: string; onOk: () => void } | null>(null);
+  const [viewMode, setViewMode] = useState<'proximas' | 'pendentes'>('proximas');
 
   function askConfirm(titulo: string, mensagem: string, onOk: () => void) {
     setConfirm({ titulo, mensagem, onOk });
@@ -38,28 +39,49 @@ export default function Agenda({ store, showToast }: Props) {
 
   const hoje = new Date();
   const em8  = new Date(hoje); em8.setDate(hoje.getDate() + 56);
+  const ontem = new Date(hoje); ontem.setDate(hoje.getDate() - 1);
+  const ha8p  = new Date(hoje); ha8p.setDate(hoje.getDate() - 56);
 
   const slots              = getAgendaSlots(state.agendas, hoje, em8).sort((a, b) => a.date.getTime() - b.date.getTime() || a.hora.localeCompare(b.hora));
   const scanSlots          = getScanSlots(state.scans, hoje, em8).sort((a, b) => a.date.getTime() - b.date.getTime() || a.hora.localeCompare(b.hora));
   const extrasNoPeriodo    = state.agendasExtras.filter(e => e.data >= fmtDate(hoje) && e.data <= fmtDate(em8)).sort((a, b) => a.data.localeCompare(b.data) || a.hora.localeCompare(b.hora));
   const recheksNoPeriodo   = state.recheks.filter(r => r.data >= fmtDate(hoje) && r.data <= fmtDate(em8)).sort((a, b) => a.data.localeCompare(b.data) || a.hora.localeCompare(b.hora));
 
+  // Pendentes = itens passados sem confirmação (8 semanas para trás)
+  const pendRec = getAgendaSlots(state.agendas, ha8p, ontem)
+    .filter(s => !state.ocorrencias[`${s.agendaId}_${fmtDate(s.date)}`]?.status);
+  const pendEx  = state.agendasExtras
+    .filter(e => e.data < fmtDate(hoje) && e.status !== 'ocorreu' && e.status !== 'nao');
+  const pendScn = getScanSlots(state.scans, ha8p, ontem)
+    .filter(s => !state.scanOcorrencias[`${s.scanId}_${fmtDate(s.date)}`]?.status);
+  const pendRck = state.recheks
+    .filter(r => r.data < fmtDate(hoje) && r.status !== 'ocorreu' && r.status !== 'nao');
+  const totalPend = pendRec.length + pendEx.length + pendScn.length + pendRck.length;
+
+  // Escolhe fonte de dados conforme modo
+  const activeRec  = viewMode === 'pendentes' ? pendRec  : slots;
+  const activeEx   = viewMode === 'pendentes' ? pendEx   : extrasNoPeriodo;
+  const activeScn  = viewMode === 'pendentes' ? pendScn  : scanSlots;
+  const activeRck  = viewMode === 'pendentes' ? pendRck  : recheksNoPeriodo;
+
   const porData: Record<string, { recorrentes: typeof slots; extras: typeof extrasNoPeriodo; scans: typeof scanSlots; recheks: typeof recheksNoPeriodo }> = {};
 
   if (filtro === 'todos' || filtro === 'reunioes') {
-    slots.forEach(s => { const k = fmtDate(s.date); if (!porData[k]) porData[k] = { recorrentes: [], extras: [], scans: [], recheks: [] }; porData[k].recorrentes.push(s); });
+    activeRec.forEach(s => { const k = fmtDate(s.date); if (!porData[k]) porData[k] = { recorrentes: [], extras: [], scans: [], recheks: [] }; porData[k].recorrentes.push(s); });
   }
   if (filtro === 'todos' || filtro === 'extras') {
-    extrasNoPeriodo.forEach(e => { if (!porData[e.data]) porData[e.data] = { recorrentes: [], extras: [], scans: [], recheks: [] }; porData[e.data].extras.push(e); });
+    activeEx.forEach(e => { if (!porData[e.data]) porData[e.data] = { recorrentes: [], extras: [], scans: [], recheks: [] }; porData[e.data].extras.push(e); });
   }
   if (filtro === 'todos' || filtro === 'scans') {
-    scanSlots.forEach(s => { const k = fmtDate(s.date); if (!porData[k]) porData[k] = { recorrentes: [], extras: [], scans: [], recheks: [] }; porData[k].scans.push(s); });
+    activeScn.forEach(s => { const k = fmtDate(s.date); if (!porData[k]) porData[k] = { recorrentes: [], extras: [], scans: [], recheks: [] }; porData[k].scans.push(s); });
   }
   if (filtro === 'todos' || filtro === 'recheks') {
-    recheksNoPeriodo.forEach(r => { if (!porData[r.data]) porData[r.data] = { recorrentes: [], extras: [], scans: [], recheks: [] }; porData[r.data].recheks.push(r); });
+    activeRck.forEach(r => { if (!porData[r.data]) porData[r.data] = { recorrentes: [], extras: [], scans: [], recheks: [] }; porData[r.data].recheks.push(r); });
   }
 
-  const datasOrdenadas = Object.keys(porData).sort();
+  const datasOrdenadas = Object.keys(porData).sort(
+    viewMode === 'pendentes' ? (a, b) => b.localeCompare(a) : (a, b) => a.localeCompare(b)
+  );
   const diasCurtos = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 
   function handleSaveRecorrente() {
@@ -115,11 +137,17 @@ export default function Agenda({ store, showToast }: Props) {
       <div>
         {/* Toolbar */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-          <div style={{ fontWeight: 800, fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ display: 'inline-block', width: 14, height: 2, background: 'var(--cyan)', borderRadius: 1 }} />
-            Próximas 8 semanas
+          <div style={{ fontWeight: 800, fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase', color: viewMode === 'pendentes' ? '#b45309' : 'var(--muted)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ display: 'inline-block', width: 14, height: 2, background: viewMode === 'pendentes' ? '#f59e0b' : 'var(--cyan)', borderRadius: 1 }} />
+            {viewMode === 'pendentes' ? '⚠ Pendentes de confirmação' : 'Próximas 8 semanas'}
           </div>
-          <button onClick={() => setShowForm(f => !f)} style={{ background: 'none', border: '1.5px solid var(--cyan-dim)', borderRadius: 5, padding: '6px 13px', fontSize: 10, fontFamily: 'inherit', fontWeight: 800, color: 'var(--cyan-dim)', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: .5 }}>+ Adicionar</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => setViewMode(v => v === 'pendentes' ? 'proximas' : 'pendentes')}
+              style={{ background: viewMode === 'pendentes' ? '#f59e0b' : totalPend > 0 ? '#fef3c7' : 'white', border: `1.5px solid ${totalPend > 0 || viewMode === 'pendentes' ? '#f59e0b' : 'var(--border)'}`, borderRadius: 5, padding: '6px 13px', fontSize: 10, fontFamily: 'inherit', fontWeight: 800, color: viewMode === 'pendentes' ? '#78350f' : totalPend > 0 ? '#92400e' : 'var(--muted)', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: .5 }}
+            >⚠ {totalPend > 0 ? `Pendentes (${totalPend})` : 'Pendentes'}</button>
+            <button onClick={() => setShowForm(f => !f)} style={{ background: 'none', border: '1.5px solid var(--cyan-dim)', borderRadius: 5, padding: '6px 13px', fontSize: 10, fontFamily: 'inherit', fontWeight: 800, color: 'var(--cyan-dim)', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: .5 }}>+ Adicionar</button>
+          </div>
         </div>
 
         {/* Filtros */}
@@ -217,7 +245,7 @@ export default function Agenda({ store, showToast }: Props) {
         {/* Lista */}
         {datasOrdenadas.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 30, color: 'var(--muted)', fontSize: 13 }}>
-            {filtro === 'todos' ? 'Nenhuma agenda. Clique em + Adicionar.' : `Nenhum(a) ${filtro === 'reunioes' ? 'reunião' : filtro === 'extras' ? 'agenda extra' : filtro === 'scans' ? 'scan' : 'recheck'} nos próximos 2 meses.`}
+            {viewMode === 'pendentes' ? 'Nenhum item pendente de confirmação nos últimos 2 meses.' : filtro === 'todos' ? 'Nenhuma agenda. Clique em + Adicionar.' : `Nenhum(a) ${filtro === 'reunioes' ? 'reunião' : filtro === 'extras' ? 'agenda extra' : filtro === 'scans' ? 'scan' : 'recheck'} nos próximos 2 meses.`}
           </div>
         ) : (
           datasOrdenadas.map(dt => {
@@ -226,9 +254,9 @@ export default function Agenda({ store, showToast }: Props) {
             const d = new Date(dt + 'T12:00:00');
             return (
               <div key={dt} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 10, overflow: 'hidden', boxShadow: '0 1px 4px rgba(35,31,32,.06)' }}>
-                <div style={{ background: 'var(--dark)', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ background: 'var(--cyan)', color: 'var(--dark)', borderRadius: 5, padding: '4px 10px', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>{fmtBR(dt)}</div>
-                  <div style={{ fontWeight: 700, fontSize: 12, color: 'rgba(255,255,255,.7)', flex: 1 }}>{diasCurtos[d.getDay()]} · {total} item{total > 1 ? 'ns' : ''}</div>
+                <div style={{ background: viewMode === 'pendentes' ? '#431407' : 'var(--dark)', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ background: viewMode === 'pendentes' ? '#f59e0b' : 'var(--cyan)', color: 'var(--dark)', borderRadius: 5, padding: '4px 10px', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>{fmtBR(dt)}</div>
+                  <div style={{ fontWeight: 700, fontSize: 12, color: 'rgba(255,255,255,.7)', flex: 1 }}>{diasCurtos[d.getDay()]} · {total} item{total > 1 ? 'ns' : ''}{viewMode === 'pendentes' ? ' · ⚠ não confirmado' : ''}</div>
                 </div>
 
                 {recorrentes.map(s => {

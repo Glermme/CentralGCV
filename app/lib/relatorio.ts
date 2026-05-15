@@ -3,23 +3,29 @@
    ════════════════════════════════════════════ */
 
 import { AppState, fmtBR, fmtDT } from '@/lib/store';
-import { getAgendaSlots } from '@/lib/agenda';
+import { getAgendaSlots, nthWeekday } from '@/lib/agenda';
 
-export function proximasSemanas(n = 4): { de: Date; ate: Date; label: string; index: number }[] {
-  const hoje = new Date();
-  const diaSemana = hoje.getDay();
-  const diasAteSeg = diaSemana === 0 ? 1 : 8 - diaSemana;
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
-  return Array.from({ length: n }, (_, i) => {
-    const seg = new Date(hoje);
-    seg.setDate(hoje.getDate() + diasAteSeg + i * 7);
-    seg.setHours(0, 0, 0, 0);
-    const dom = new Date(seg);
-    dom.setDate(seg.getDate() + 6);
-    dom.setHours(23, 59, 59, 999);
-    const label = `Semana ${i + 1} · ${fmtBR(seg.toISOString().split('T')[0])} – ${fmtBR(dom.toISOString().split('T')[0])}`;
-    return { de: seg, ate: dom, label, index: i + 1 };
-  });
+export function semanasDoMes(date: Date): { ocorrencia: number; label: string; de: Date; ate: Date; mesLabel: string }[] {
+  const ano = date.getFullYear();
+  const mes = date.getMonth();
+  const mesLabel = `${MESES[mes]} ${ano}`;
+  const result: { ocorrencia: number; label: string; de: Date; ate: Date; mesLabel: string }[] = [];
+
+  for (const n of [1, 2, 3, 4]) {
+    const datas: Date[] = [];
+    for (let wd = 1; wd <= 5; wd++) {
+      const dt = nthWeekday(ano, mes, n, wd);
+      if (dt) datas.push(dt);
+    }
+    if (!datas.length) continue;
+    const de  = new Date(Math.min(...datas.map(d => d.getTime()))); de.setHours(0, 0, 0, 0);
+    const ate = new Date(Math.max(...datas.map(d => d.getTime()))); ate.setHours(23, 59, 59, 999);
+    const label = `${n}ª Semana · ${fmtBR(de.toISOString().split('T')[0])} – ${fmtBR(ate.toISOString().split('T')[0])}`;
+    result.push({ ocorrencia: n, label, de, ate, mesLabel });
+  }
+  return result;
 }
 
 export interface ClienteRelatorio {
@@ -36,7 +42,7 @@ export interface ComentarioRelatorio {
 }
 
 export function buildRelatorioData(
-  state: AppState, de: Date, ate: Date, filtroClienteId = ''
+  state: AppState, de: Date, ate: Date, filtroClienteIds: string[] = []
 ): { clientes: ClienteRelatorio[]; semana: string; geradoEm: string; totalTarefas: number; totalComentarios: number } {
   const deStr  = de.toISOString().split('T')[0];
   const ateStr = ate.toISOString().split('T')[0];
@@ -62,7 +68,7 @@ export function buildRelatorioData(
   const clientes: ClienteRelatorio[] = [];
 
   clienteIds.forEach(cid => {
-    if (filtroClienteId && cid !== filtroClienteId) return;
+    if (filtroClienteIds.length > 0 && !filtroClienteIds.includes(cid)) return;
     const c = state.clientes.find(x => x.id === cid); if (!c) return;
     const abertas = state.tarefas.filter(t => t.clienteId === cid && t.status !== 'concluida' && t.status !== 'cancelada');
     if (!abertas.length) return;
@@ -87,12 +93,11 @@ export function buildRelatorioData(
 
 const ST_LABEL: Record<string, string> = { pendente: 'Pendente', andamento: 'Em andamento' };
 
-// filename agora é parâmetro obrigatório — passado pelo ModalRelatorio
 export function gerarHTMLRelatorio(
   state: AppState, de: Date, ate: Date,
-  filtroClienteId = '', filename = 'relatorio.pdf'
+  filtroClienteIds: string[] = [], filename = 'relatorio.pdf'
 ): string {
-  const { clientes, semana, geradoEm, totalTarefas, totalComentarios } = buildRelatorioData(state, de, ate, filtroClienteId);
+  const { clientes, semana, geradoEm, totalTarefas, totalComentarios } = buildRelatorioData(state, de, ate, filtroClienteIds);
   const geradoData = fmtBR(new Date().toISOString().split('T')[0]);
 
   const blocos = clientes.map(c => {
