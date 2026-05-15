@@ -92,6 +92,7 @@ function mapState(
       nome: t.nome, numero: t.numero || '', descricao: t.descricao || '',
       criadoEm: t.criado_em, previsaoConclusao: t.previsao_conclusao || '',
       prazo: t.prazo || '', status: t.status,
+      tarefaId: t.tarefa_id || undefined,
     })),
     colorIdx: 0,
   };
@@ -267,6 +268,7 @@ export async function dbAddTicket(t: Ticket, ownerId: string) {
     nome: t.nome, numero: t.numero, descricao: t.descricao,
     previsao_conclusao: t.previsaoConclusao || null, prazo: t.prazo || null,
     status: t.status,
+    tarefa_id: t.tarefaId || null,
   });
 }
 export async function dbDelTicket(id: string) {

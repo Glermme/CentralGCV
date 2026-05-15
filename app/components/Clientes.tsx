@@ -14,12 +14,13 @@ interface Props {
 const PRESET_COLORS = ['#0ab8d8', '#2aaa5a', '#e8830a', '#7c3aed', '#c0392b', '#0f766e'];
 
 export default function Clientes({ store, showToast }: Props) {
-  const { state, userId, userRole, toggleConcluida, cycleStatus, delTarefa, addTarefa, addTarefasBatch, addComentario, delComentario, addCliente, delCliente, randomColor } = store;
+  const { state, userId, userRole, toggleConcluida, cycleStatus, delTarefa, addTarefa, addTarefasBatch, addComentario, delComentario, addCliente, delCliente, randomColor, addTicket } = store;
 
   const [novoNome, setNovoNome] = useState('');
   const [novaCor,  setNovaCor]  = useState(PRESET_COLORS[0]);
   const pickerRef = useRef<HTMLInputElement>(null);
 
+  const [showAddForm, setShowAddForm] = useState(false);
   const [expanded,  setExpanded]  = useState<Record<string, boolean>>({});
   const [formOpen,  setFormOpen]  = useState<Record<string, boolean>>({});
   const [cmntOpen,  setCmntOpen]  = useState<Record<string, boolean>>({});
@@ -30,9 +31,10 @@ export default function Clientes({ store, showToast }: Props) {
   // ModalConfirm state
   const [confirm, setConfirm] = useState<{ titulo: string; mensagem: string; onOk: () => void } | null>(null);
 
-  const [formDesc,   setFormDesc]   = useState<Record<string, string>>({});
-  const [formPrazo,  setFormPrazo]  = useState<Record<string, string>>({});
-  const [formStatus, setFormStatus] = useState<Record<string, string>>({});
+  const [formDesc,        setFormDesc]        = useState<Record<string, string>>({});
+  const [formPrazo,       setFormPrazo]       = useState<Record<string, string>>({});
+  const [formStatus,      setFormStatus]      = useState<Record<string, string>>({});
+  const [formCriarTicket, setFormCriarTicket] = useState<Record<string, boolean>>({});
   const [batchTxt,   setBatchTxt]   = useState('');
   const [batchPrazo, setBatchPrazo] = useState('');
   const [cmntInput,  setCmntInput]  = useState<Record<string, string>>({});
@@ -68,12 +70,22 @@ export default function Clientes({ store, showToast }: Props) {
 
   function toggle(id: string) { setExpanded(p => ({ ...p, [id]: !p[id] })); }
 
-  function handleAddInline(cid: string) {
+  async function handleAddInline(cid: string) {
     const desc = (formDesc[cid] || '').trim();
     if (!desc) { showToast('Descreva a tarefa'); return; }
-    addTarefa(cid, desc, formPrazo[cid] || '', (formStatus[cid] || 'pendente') as any);
+    const tarefa = await addTarefa(cid, desc, formPrazo[cid] || '', (formStatus[cid] || 'pendente') as any);
+    if (formCriarTicket[cid] && tarefa) {
+      await addTicket({
+        nome: desc.length > 80 ? desc.slice(0, 80) + '…' : desc,
+        numero: '', descricao: '',
+        clienteId: cid, previsaoConclusao: '', prazo: formPrazo[cid] || '',
+        status: 'aberto', tarefaId: tarefa.id,
+      });
+    }
     setFormDesc(p => ({ ...p, [cid]: '' })); setFormPrazo(p => ({ ...p, [cid]: '' }));
-    setFormOpen(p => ({ ...p, [cid]: false })); showToast('Tarefa adicionada ✓');
+    setFormCriarTicket(p => ({ ...p, [cid]: false }));
+    setFormOpen(p => ({ ...p, [cid]: false }));
+    showToast(formCriarTicket[cid] ? 'Tarefa + ticket adicionados ✓' : 'Tarefa adicionada ✓');
   }
 
   function handleBatch(cid: string) {
@@ -122,62 +134,68 @@ export default function Clientes({ store, showToast }: Props) {
 
   return (
     <>
-      <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 16, alignItems: 'start' }}>
-
-        {/* ══ CARD NOVO CLIENTE ══ */}
+      {/* ══ HEADER + BOTÃO NOVO ══ */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ display: 'inline-block', width: 14, height: 2, background: 'var(--cyan)', borderRadius: 1 }} />
+          Clientes · {state.clientes.length}
+        </div>
         {!isViewer && (
-          <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden', position: 'sticky', top: 78, boxShadow: '0 4px 20px rgba(35,31,32,.08)' }}>
-            <div style={{ background: 'var(--dark)', padding: '20px 20px 16px', borderBottom: `3px solid ${novaCor}`, transition: 'border-color .3s' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 10, background: novaCor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800, color: 'white', flexShrink: 0, transition: 'background .3s', boxShadow: `0 4px 12px ${novaCor}55` }}>
-                  {novoNome ? novoNome.charAt(0).toUpperCase() : '+'}
-                </div>
-                <div>
-                  <div style={{ fontWeight: 800, fontSize: 14, color: 'white' }}>{novoNome || 'Novo Cliente'}</div>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,.4)', marginTop: 2, letterSpacing: .5 }}>CENTRAL GCV</div>
-                </div>
-              </div>
-            </div>
+          <button
+            onClick={() => { setShowAddForm(f => !f); if (!showAddForm) { setNovoNome(''); } }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: showAddForm ? 'var(--dark)' : 'none', border: `1.5px solid ${showAddForm ? 'var(--dark)' : 'var(--cyan-dim)'}`, borderRadius: 6, padding: '6px 14px', fontSize: 10, fontFamily: 'inherit', fontWeight: 800, color: showAddForm ? 'white' : 'var(--cyan-dim)', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: .5, transition: 'all .2s' }}
+          >{showAddForm ? '✕ Cancelar' : '+ Novo Cliente'}</button>
+        )}
+      </div>
 
-            <div style={{ padding: '18px 20px 20px' }}>
+      {/* ══ FORM NOVO CLIENTE (colapsável) ══ */}
+      {!isViewer && showAddForm && (
+        <div style={{ background: 'white', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 16, boxShadow: '0 4px 20px rgba(35,31,32,.08)' }}>
+          <div style={{ background: 'var(--dark)', padding: '16px 20px', borderBottom: `3px solid ${novaCor}`, transition: 'border-color .3s', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: novaCor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 800, color: 'white', flexShrink: 0, transition: 'background .3s', boxShadow: `0 4px 12px ${novaCor}55` }}>
+              {novoNome ? novoNome.charAt(0).toUpperCase() : '+'}
+            </div>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 14, color: 'white' }}>{novoNome || 'Novo Cliente'}</div>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,.4)', marginTop: 2, letterSpacing: .5 }}>CENTRAL GCV</div>
+            </div>
+          </div>
+          <div style={{ padding: '16px 20px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 24px' }}>
+            <div>
               <label style={{ fontSize: 9, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1.5, display: 'block', marginBottom: 6 }}>Nome da Empresa</label>
               <input type="text" value={novoNome} onChange={e => setNovoNome(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddCliente()} placeholder="Ex: Acme Corp"
                 style={{ width: '100%', padding: '10px 12px', border: '1.5px solid var(--border)', borderRadius: 8, fontFamily: 'inherit', fontSize: 13, outline: 'none', background: 'white', marginBottom: 16, transition: 'border-color .2s' }}
                 onFocus={e => (e.target.style.borderColor = novaCor)} onBlur={e => (e.target.style.borderColor = 'var(--border)')}
               />
-
+            </div>
+            <div>
               <label style={{ fontSize: 9, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1.5, display: 'block', marginBottom: 10 }}>Cor Identificadora</label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 7, marginBottom: 12 }}>
+              <div style={{ display: 'flex', gap: 7, marginBottom: 12, alignItems: 'center' }}>
                 {PRESET_COLORS.map(c => (
-                  <button key={c} onClick={() => setNovaCor(c)} style={{ aspectRatio: '1', border: 'none', borderRadius: 8, background: c, cursor: 'pointer', outline: novaCor === c ? `3px solid ${c}` : '3px solid transparent', outlineOffset: 2, transform: novaCor === c ? 'scale(1.15)' : 'scale(1)', transition: 'transform .15s, outline .15s', boxShadow: novaCor === c ? `0 3px 10px ${c}66` : '0 2px 6px rgba(0,0,0,.12)' }} />
+                  <button key={c} onClick={() => setNovaCor(c)} style={{ width: 26, height: 26, border: 'none', borderRadius: 6, background: c, cursor: 'pointer', outline: novaCor === c ? `3px solid ${c}` : '3px solid transparent', outlineOffset: 2, transform: novaCor === c ? 'scale(1.15)' : 'scale(1)', transition: 'transform .15s, outline .15s', boxShadow: novaCor === c ? `0 3px 10px ${c}66` : '0 2px 6px rgba(0,0,0,.12)', flexShrink: 0 }} />
                 ))}
-                <div style={{ aspectRatio: '1', borderRadius: 8, position: 'relative', outline: isPickerActive ? `3px solid ${novaCor}` : '3px solid transparent', outlineOffset: 2, transform: isPickerActive ? 'scale(1.15)' : 'scale(1)', transition: 'transform .15s', overflow: 'hidden', cursor: 'pointer' }}>
-                  <div style={{ position: 'absolute', inset: 0, background: isPickerActive ? novaCor : 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)', borderRadius: 8 }} />
+                <div style={{ width: 26, height: 26, borderRadius: 6, position: 'relative', outline: isPickerActive ? `3px solid ${novaCor}` : '3px solid transparent', outlineOffset: 2, transform: isPickerActive ? 'scale(1.15)' : 'scale(1)', transition: 'transform .15s', overflow: 'hidden', cursor: 'pointer', flexShrink: 0 }}>
+                  <div style={{ position: 'absolute', inset: 0, background: isPickerActive ? novaCor : 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)', borderRadius: 6 }} />
                   <input ref={pickerRef} type="color" value={novaCor} onChange={e => setNovaCor(e.target.value)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer', border: 'none', padding: 0 }} />
                 </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: 8, alignItems: 'stretch', marginBottom: 16 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 8, background: novaCor, flexShrink: 0, border: '2px solid var(--border)', transition: 'background .2s', boxShadow: `0 3px 10px ${novaCor}44` }} />
                 <button onClick={() => setNovaCor(randomColor())}
-                  style={{ flex: 1, background: 'var(--ivory2)', border: '1.5px dashed var(--border)', borderRadius: 8, padding: '8px 10px', fontSize: 10, fontFamily: 'inherit', fontWeight: 800, color: 'var(--muted)', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: .8, transition: 'all .15s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = novaCor; (e.currentTarget as HTMLElement).style.color = novaCor; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
-                >🎲 Aleatória</button>
+                  style={{ background: 'var(--ivory2)', border: '1.5px dashed var(--border)', borderRadius: 6, padding: '5px 10px', fontSize: 10, fontFamily: 'inherit', fontWeight: 800, color: 'var(--muted)', cursor: 'pointer' }}>🎲</button>
               </div>
-
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
               <button onClick={handleAddCliente}
-                style={{ width: '100%', padding: '12px', background: novaCor, color: 'white', border: 'none', borderRadius: 10, fontFamily: 'inherit', fontWeight: 800, fontSize: 12, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: .8, transition: 'all .2s', boxShadow: `0 6px 18px ${novaCor}44` }}
+                style={{ padding: '11px 24px', background: novaCor, color: 'white', border: 'none', borderRadius: 8, fontFamily: 'inherit', fontWeight: 800, fontSize: 12, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: .8, transition: 'all .2s', boxShadow: `0 6px 18px ${novaCor}44` }}
                 onMouseEnter={e => (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'}
                 onMouseLeave={e => (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'}
               >+ Adicionar Cliente</button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* ══ LISTA ══ */}
-        <div>
-          {state.clientes.length === 0 && <div style={{ textAlign: 'center', padding: 30, color: 'var(--muted)', fontSize: 12 }}>Nenhum cliente. Adicione pelo painel ao lado.</div>}
+      {/* ══ GRID / LISTA ══ */}
+      <div style={showAddForm ? {} : { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        {state.clientes.length === 0 && <div style={{ textAlign: 'center', padding: 30, color: 'var(--muted)', fontSize: 12, gridColumn: '1/-1' }}>Nenhum cliente. Clique em "+ Novo Cliente" para adicionar.</div>}
 
           {state.clientes.map(c => {
             const ts      = state.tarefas.filter(t => t.clienteId === c.id);
@@ -233,6 +251,7 @@ export default function Clientes({ store, showToast }: Props) {
                       const isLateT  = isLate(t.prazo) && t.status !== 'concluida' && t.status !== 'finalizado';
                       const isFinal  = t.status === 'finalizado';
                       const isConc   = t.status === 'concluida';
+                      const ticketVinculado = state.tickets.find(tk => tk.tarefaId === t.id);
                       const hasC     = t.comentarios.length > 0;
                       const files    = cmntFiles[t.id] || [];
                       const loading  = cmntLoading[t.id];
@@ -247,6 +266,7 @@ export default function Clientes({ store, showToast }: Props) {
                               <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 5, flexWrap: 'wrap' }}>
                                 {t.prazo && <span style={{ fontSize: 11, color: isLateT ? 'var(--danger)' : 'var(--muted)', fontWeight: isLateT ? 600 : 400 }}>{isLateT ? '⚠ ' : ''}{fmtBR(t.prazo)}</span>}
                                 <button className={`spill sp-${t.status}`} onClick={() => { if (!isViewer) cycleStatus(t.id); }} style={{ cursor: isViewer ? 'default' : 'pointer' }}>{labelStatus(t.status)}</button>
+                                {ticketVinculado && <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--cyan-dim)', background: 'var(--cyan-soft)', border: '1px solid rgba(13,219,255,.25)', borderRadius: 4, padding: '2px 6px' }} title={`Ticket: ${ticketVinculado.nome}`}>🎫 ticket</span>}
                               </div>
                             </div>
                             <div style={{ display: 'flex', gap: 5, alignItems: 'flex-start', flexShrink: 0 }}>
@@ -319,6 +339,12 @@ export default function Clientes({ store, showToast }: Props) {
                             <option value="andamento">Em andamento</option>
                           </select>
                         </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none' }}>
+                            <input type="checkbox" checked={!!formCriarTicket[c.id]} onChange={e => setFormCriarTicket(p => ({ ...p, [c.id]: e.target.checked }))} style={{ accentColor: 'var(--cyan-dim)', width: 14, height: 14, cursor: 'pointer' }} />
+                            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>Criar ticket vinculado</span>
+                          </label>
+                        </div>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <button onClick={() => handleAddInline(c.id)} style={{ background: 'var(--cyan-dim)', color: 'var(--dark)', border: 'none', borderRadius: 5, padding: '9px 18px', fontFamily: 'inherit', fontWeight: 800, fontSize: 11, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: .5 }}>Salvar</button>
                           <button onClick={() => setFormOpen(p => ({ ...p, [c.id]: false }))} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 5, padding: '9px 14px', fontFamily: 'inherit', fontWeight: 700, fontSize: 11, cursor: 'pointer', color: 'var(--muted)' }}>Cancelar</button>
@@ -360,7 +386,6 @@ export default function Clientes({ store, showToast }: Props) {
               </div>
             );
           })}
-        </div>
       </div>
 
       {compartilharCliente && userId && (

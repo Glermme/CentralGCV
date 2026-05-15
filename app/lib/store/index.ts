@@ -197,6 +197,7 @@ export interface Ticket {
   previsaoConclusao:  string;
   prazo:              string;
   status:             'aberto' | 'em_atendimento' | 'resolvido' | 'fechado';
+  tarefaId?:          string;
 }
 
 export function proxTerca(): Date {

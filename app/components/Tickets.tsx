@@ -209,6 +209,7 @@ export default function Tickets({ store, showToast }: Props) {
               const stColor  = colorTicketStatus(t.status);
               const hoje     = new Date().toISOString().split('T')[0];
               const vencido  = t.prazo && t.prazo < hoje && t.status !== 'resolvido' && t.status !== 'fechado';
+              const tarefaVinculada = t.tarefaId ? state.tarefas.find(tf => tf.id === t.tarefaId) : null;
               return (
                 <div key={t.id} style={{ background: 'white', border: `1px solid ${vencido ? '#fecaca' : 'var(--border)'}`, borderLeft: `4px solid ${stColor}`, borderRadius: 10, padding: '12px 16px', boxShadow: '0 1px 4px rgba(35,31,32,.05)' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
@@ -225,6 +226,16 @@ export default function Tickets({ store, showToast }: Props) {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4 }}>
                           <div style={{ width: 7, height: 7, borderRadius: '50%', background: cli.cor }} />
                           <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>{cli.nome}</span>
+                        </div>
+                      )}
+
+                      {/* Tarefa vinculada */}
+                      {tarefaVinculada && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 5, background: 'var(--ivory2)', border: '1px solid var(--border)', borderRadius: 5, padding: '4px 8px', alignSelf: 'flex-start', maxWidth: '100%' }}>
+                          <span style={{ fontSize: 10, color: 'var(--cyan-dim)', fontWeight: 800 }}>🔗 Tarefa:</span>
+                          <span style={{ fontSize: 11, color: 'var(--text)', fontWeight: 600 }} title={tarefaVinculada.desc}>
+                            {tarefaVinculada.desc.length > 60 ? tarefaVinculada.desc.slice(0, 60) + '…' : tarefaVinculada.desc}
+                          </span>
                         </div>
                       )}
 

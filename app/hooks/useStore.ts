@@ -94,14 +94,15 @@ export function useStore() {
   }, [update, state.clientes, log]);
 
   // ── TAREFAS ──────────────────────────────
-  const addTarefa = useCallback(async (clienteId: string, desc: string, prazo: string, status: Tarefa['status']) => {
-    if (!userId) return;
+  const addTarefa = useCallback(async (clienteId: string, desc: string, prazo: string, status: Tarefa['status']): Promise<Tarefa | null> => {
+    if (!userId) return null;
     const last = [...state.reunioes].sort((a, b) => b.data.localeCompare(a.data))[0];
     const tarefa: Tarefa = { id: uid(), clienteId, desc, prazo, status, reuniaoId: last?.id ?? null, criadaEm: new Date().toISOString(), comentarios: [] };
     await dbAddTarefa(tarefa, userId);
     const clienteNome = state.clientes.find(c => c.id === clienteId)?.nome || '';
     log('criar', 'tarefa', tarefa.id, `${clienteNome}: ${desc.slice(0, 60)}`);
     update(s => ({ ...s, tarefas: [...s.tarefas, tarefa] }));
+    return tarefa;
   }, [update, userId, state.reunioes, state.clientes, log]);
 
   const updateTarefaStatus = useCallback(async (id: string, status: Tarefa['status']) => {

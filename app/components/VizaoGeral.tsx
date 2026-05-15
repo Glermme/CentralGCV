@@ -193,7 +193,7 @@ export default function VizaoGeral({ store, showToast, onOpenReuniao }: Props) {
       )}
 
       {/* ── CLIENTES & SAÚDE + STATS ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10, marginBottom: 20 }}>
         <div style={{ background: 'var(--dark)', borderRadius: 8, padding: '14px 14px 12px', borderLeft: '3px solid var(--cyan)' }}>
           <div style={{ fontWeight: 800, fontSize: 30, lineHeight: 1, color: 'var(--cyan)', marginBottom: 4 }}>{clientes.length}</div>
           <div style={{ fontSize: 10, color: 'rgba(255,255,255,.4)', fontWeight: 600, letterSpacing: .8, textTransform: 'uppercase', marginBottom: 6 }}>Clientes</div>
