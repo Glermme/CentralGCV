@@ -138,6 +138,7 @@ export default function ModalExport({ open, onClose, store, showToast }: Props) 
               <option value="pendente">Pendente</option>
               <option value="andamento">Em andamento</option>
               <option value="concluida">Concluída</option>
+              <option value="finalizado">Finalizado</option>
               <option value="cancelada">Cancelada</option>
             </>)}
 

@@ -22,13 +22,14 @@ export default function VizaoGeral({ store, showToast, onOpenReuniao }: Props) {
   const [motivoScan,   setMotivoScan]   = useState<{ scanId: string; data: string } | null>(null);
   const [motivoTxt,    setMotivoTxt]    = useState('');
 
-  const pend = tarefas.filter(t => t.status !== 'concluida' && t.status !== 'cancelada');
-  const late = pend.filter(t => isLate(t.prazo));
+  const pend = tarefas.filter(t => t.status !== 'finalizado' && t.status !== 'cancelada');
+  const late = pend.filter(t => isLate(t.prazo) && t.status !== 'concluida');
   const anda = tarefas.filter(t => t.status === 'andamento');
   const conc = tarefas.filter(t => t.status === 'concluida');
+  const fin  = tarefas.filter(t => t.status === 'finalizado');
 
-  const clientesComAbertas = clientes.filter(c => tarefas.some(t => t.clienteId === c.id && t.status !== 'concluida' && t.status !== 'cancelada')).length;
-  const clientesComAtraso  = clientes.filter(c => tarefas.some(t => t.clienteId === c.id && isLate(t.prazo) && t.status !== 'concluida')).length;
+  const clientesComAbertas = clientes.filter(c => tarefas.some(t => t.clienteId === c.id && t.status !== 'finalizado' && t.status !== 'cancelada')).length;
+  const clientesComAtraso  = clientes.filter(c => tarefas.some(t => t.clienteId === c.id && isLate(t.prazo) && t.status !== 'finalizado' && t.status !== 'concluida')).length;
 
   const hoje = new Date();
   const em14 = new Date(hoje); em14.setDate(hoje.getDate() + 14);
@@ -47,11 +48,13 @@ export default function VizaoGeral({ store, showToast, onOpenReuniao }: Props) {
 
   const diasCurtos = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 
+  const abertas = tarefas.filter(t => t.status === 'pendente' || t.status === 'andamento');
   const stats = [
-    { label: 'Em Aberto',    value: pend.length, color: 'var(--warn)'    },
-    { label: 'Atrasadas',    value: late.length, color: 'var(--danger)'  },
-    { label: 'Em Andamento', value: anda.length, color: 'var(--cyan)'    },
-    { label: 'Concluídas',   value: conc.length, color: 'var(--success)' },
+    { label: 'Em Aberto',    value: abertas.length, color: 'var(--warn)'    },
+    { label: 'Atrasadas',    value: late.length,    color: 'var(--danger)'  },
+    { label: 'Em Andamento', value: anda.length,    color: 'var(--cyan)'    },
+    { label: 'Concluídas',   value: conc.length,    color: 'var(--success)' },
+    { label: 'Finalizadas',  value: fin.length,     color: 'var(--muted)'   },
   ];
 
   function NavBtns({ idx, setIdx, total }: { idx: number; setIdx: (n: number) => void; total: number }) {
@@ -113,7 +116,7 @@ export default function VizaoGeral({ store, showToast, onOpenReuniao }: Props) {
               </div>
               {porData[datas[reunIdxSafe]]?.map(s => {
                 const c = clientes.find(x => x.id === s.clienteId); if (!c) return null;
-                const pTasks = tarefas.filter(t => t.clienteId === c.id && t.status !== 'concluida' && t.status !== 'cancelada');
+                const pTasks = tarefas.filter(t => t.clienteId === c.id && t.status !== 'finalizado' && t.status !== 'cancelada');
                 const atrs   = pTasks.filter(t => isLate(t.prazo));
                 return (
                   <div key={s.agendaId} style={{ display: 'flex', alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid var(--dark3)', gap: 12 }}>

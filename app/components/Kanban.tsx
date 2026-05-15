@@ -11,8 +11,9 @@ interface Props {
 
 const COLUNAS = [
   { status: 'pendente',  label: 'Pendente',      color: 'var(--warn)'    },
-  { status: 'andamento', label: 'Em Andamento',   color: 'var(--cyan)'    },
-  { status: 'concluida', label: 'Concluída',      color: 'var(--success)' },
+  { status: 'andamento', label: 'Em Andamento',  color: 'var(--cyan)'    },
+  { status: 'concluida', label: 'Concluída',     color: 'var(--success)' },
+  { status: 'finalizado',label: 'Finalizado',    color: 'var(--muted)'   },
 ] as const;
 
 export default function Kanban({ store, showToast }: Props) {
@@ -66,6 +67,7 @@ export default function Kanban({ store, showToast }: Props) {
             <option value="pendente">Pendente</option>
             <option value="andamento">Em andamento</option>
             <option value="concluida">Concluída</option>
+            <option value="finalizado">Finalizado</option>
             <option value="cancelada">Cancelada</option>
           </select>
 
@@ -94,7 +96,7 @@ export default function Kanban({ store, showToast }: Props) {
       </div>
 
       {/* Colunas */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
         {COLUNAS.map(col => {
           const items = tarefasPorStatus(col.status);
           return (
@@ -115,7 +117,7 @@ export default function Kanban({ store, showToast }: Props) {
                 )}
                 {items.map(t => {
                   const c    = clientes.find(x => x.id === t.clienteId);
-                  const l    = isLate(t.prazo) && t.status !== 'concluida';
+                  const l    = isLate(t.prazo) && t.status !== 'concluida' && t.status !== 'finalizado';
                   const hasC = t.comentarios.length > 0;
                   if (!c) return null;
                   return (
@@ -138,7 +140,7 @@ export default function Kanban({ store, showToast }: Props) {
                       </div>
 
                       {/* Descrição */}
-                      <div style={{ fontSize: 12, lineHeight: 1.5, color: t.status === 'concluida' ? 'var(--muted)' : 'var(--dark)', textDecoration: t.status === 'concluida' ? 'line-through' : 'none', marginBottom: 8 }}>
+                      <div style={{ fontSize: 12, lineHeight: 1.5, color: t.status === 'finalizado' ? 'var(--muted)' : 'var(--dark)', textDecoration: t.status === 'finalizado' ? 'line-through' : 'none', marginBottom: 8 }}>
                         {t.desc}
                       </div>
 

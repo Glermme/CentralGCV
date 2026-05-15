@@ -176,7 +176,7 @@ export default function Historico({ store }: Props) {
                       state.clientes.map(c => {
                         const ts = tarefas.filter(t => t.clienteId === c.id);
                         if (!ts.length) return null;
-                        const conc = ts.filter(t => t.status === 'concluida').length;
+                        const conc = ts.filter(t => t.status === 'concluida' || t.status === 'finalizado').length;
                         return (
                           <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 14px 7px 24px', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
                             <div style={{ width: 7, height: 7, borderRadius: '50%', background: c.cor, flexShrink: 0 }} />

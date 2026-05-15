@@ -44,11 +44,16 @@ export function getAgendaSlots(agendas: AgendaRecorrente[], from: Date, to: Date
 
   agendas.forEach(ag => {
     const jsDay = convToJSDay(ag.diaSemana);
-    let y = start.getFullYear(), m = start.getMonth();
+    // Slots só existem a partir da data de criação da agenda
+    const floor = ag.criadoEm ? new Date(ag.criadoEm) : start;
+    floor.setHours(0, 0, 0, 0);
+    const effectiveStart = floor > start ? floor : start;
+
+    let y = effectiveStart.getFullYear(), m = effectiveStart.getMonth();
     const endY = end.getFullYear(), endM = end.getMonth();
     while (y < endY || (y === endY && m <= endM)) {
       const dt = nthWeekday(y, m, ag.ocorrencia, jsDay);
-      if (dt && dt >= start && dt <= end) {
+      if (dt && dt >= effectiveStart && dt <= end) {
         slots.push({ agendaId: ag.id, clienteId: ag.clienteId, date: new Date(dt), hora: ag.hora, obs: ag.obs });
       }
       m++; if (m > 11) { m = 0; y++; }
@@ -64,11 +69,16 @@ export function getScanSlots(scans: Scan[], from: Date, to: Date): ScanSlot[] {
 
   scans.forEach(sc => {
     const jsDay = convToJSDay(sc.diaSemana);
-    let y = start.getFullYear(), m = start.getMonth();
+    // Slots só existem a partir da data de criação do scan
+    const floor = sc.criadoEm ? new Date(sc.criadoEm) : start;
+    floor.setHours(0, 0, 0, 0);
+    const effectiveStart = floor > start ? floor : start;
+
+    let y = effectiveStart.getFullYear(), m = effectiveStart.getMonth();
     const endY = end.getFullYear(), endM = end.getMonth();
     while (y < endY || (y === endY && m <= endM)) {
       const dt = nthWeekday(y, m, sc.ocorrencia, jsDay);
-      if (dt && dt >= start && dt <= end) {
+      if (dt && dt >= effectiveStart && dt <= end) {
         slots.push({ scanId: sc.id, clienteId: sc.clienteId, date: new Date(dt), hora: sc.hora, obs: sc.obs });
       }
       m++; if (m > 11) { m = 0; y++; }

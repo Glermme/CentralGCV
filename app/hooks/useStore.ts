@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import {
-  AppState, Tarefa, Cliente, AgendaRecorrente, AgendaExtra, Scan, Recheck,
+  AppState, Tarefa, Ticket, Cliente, AgendaRecorrente, AgendaExtra, Scan, Recheck, Prem, Atividade,
   loadState, saveState, uid, hslToHex,
 } from '@/lib/store';
 import {
@@ -15,7 +15,10 @@ import {
   dbAddAgendaExtra, dbDelAgendaExtra, dbSetAgendaExtraStatus,
   dbAddScan, dbDelScan, dbSetScanStatus,
   dbAddRecheck, dbDelRecheck, dbSetRechekStatus,
+  dbAddPrem, dbDelPrem, dbSetPremStatus,
+  dbAddAtividade, dbDelAtividade, dbSetAtividadeStatus,
   dbSetOcorrencia,
+  dbAddTicket, dbDelTicket, dbUpdateTicket,
 } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 
@@ -118,7 +121,7 @@ export function useStore() {
 
   const cycleStatus = useCallback(async (id: string) => {
     const t = state.tarefas.find(t => t.id === id); if (!t) return;
-    const ciclo: Tarefa['status'][] = ['pendente', 'andamento', 'concluida'];
+    const ciclo: Tarefa['status'][] = ['pendente', 'andamento', 'concluida', 'finalizado'];
     const next = ciclo[(ciclo.indexOf(t.status) + 1) % ciclo.length];
     await dbUpdateTarefaStatus(id, next);
     log('status', 'tarefa', id, `→ ${next}: ${t.desc.slice(0, 40)}`);
@@ -181,9 +184,9 @@ export function useStore() {
   }, [update, userId, log]);
 
   // ── AGENDAS ──────────────────────────────
-  const addAgenda = useCallback(async (agenda: Omit<AgendaRecorrente, 'id'>) => {
+  const addAgenda = useCallback(async (agenda: Omit<AgendaRecorrente, 'id' | 'criadoEm'>) => {
     if (!userId) return;
-    const nova = { id: uid(), ...agenda };
+    const nova: AgendaRecorrente = { id: uid(), criadoEm: new Date().toISOString(), ...agenda };
     await dbAddAgenda(nova, userId);
     const clienteNome = state.clientes.find(c => c.id === agenda.clienteId)?.nome || '';
     log('criar', 'agenda', nova.id, clienteNome);
@@ -219,9 +222,9 @@ export function useStore() {
   }, [update, log]);
 
   // ── SCANS ─────────────────────────────────
-  const addScan = useCallback(async (scan: Omit<Scan, 'id'>) => {
+  const addScan = useCallback(async (scan: Omit<Scan, 'id' | 'criadoEm'>) => {
     if (!userId) return;
-    const novo = { id: uid(), ...scan };
+    const novo: Scan = { id: uid(), criadoEm: new Date().toISOString(), ...scan };
     await dbAddScan(novo, userId);
     const clienteNome = state.clientes.find(c => c.id === scan.clienteId)?.nome || '';
     log('criar', 'scan', novo.id, clienteNome);
@@ -263,6 +266,50 @@ export function useStore() {
     update(s => ({ ...s, recheks: s.recheks.map(r => r.id === id ? { ...r, status, motivo } : r) }));
   }, [update, log]);
 
+  // ── PREMS ─────────────────────────────────
+  const addPrem = useCallback(async (prem: Omit<Prem, 'id' | 'ownerId' | 'status' | 'motivo' | 'criadoEm'>) => {
+    if (!userId) return;
+    const nova: Prem = { id: uid(), ownerId: userId, status: '', motivo: '', criadoEm: new Date().toISOString(), ...prem };
+    await dbAddPrem(nova, userId);
+    const clienteNome = state.clientes.find(c => c.id === prem.clienteId)?.nome || '';
+    log('criar', 'prem', nova.id, `${clienteNome} ${prem.data} ${prem.hora}`);
+    update(s => ({ ...s, prems: [...s.prems, nova] }));
+  }, [update, userId, state.clientes, log]);
+
+  const delPrem = useCallback(async (id: string) => {
+    await dbDelPrem(id);
+    log('excluir', 'prem', id);
+    update(s => ({ ...s, prems: s.prems.filter(p => p.id !== id) }));
+  }, [update, log]);
+
+  const setPremStatus = useCallback(async (id: string, status: string, motivo = '') => {
+    await dbSetPremStatus(id, status, motivo);
+    log('status', 'prem', id, `→ ${status}${motivo ? ': ' + motivo : ''}`);
+    update(s => ({ ...s, prems: s.prems.map(p => p.id === id ? { ...p, status, motivo } : p) }));
+  }, [update, log]);
+
+  // ── ATIVIDADES ────────────────────────────
+  const addAtividade = useCallback(async (atv: Omit<Atividade, 'id' | 'ownerId' | 'status' | 'motivo' | 'criadoEm'>) => {
+    if (!userId) return;
+    const nova: Atividade = { id: uid(), ownerId: userId, status: '', motivo: '', criadoEm: new Date().toISOString(), ...atv };
+    await dbAddAtividade(nova, userId);
+    const clienteNome = state.clientes.find(c => c.id === atv.clienteId)?.nome || '';
+    log('criar', 'atividade', nova.id, `${clienteNome} ${atv.data} ${atv.hora}`);
+    update(s => ({ ...s, atividades: [...s.atividades, nova] }));
+  }, [update, userId, state.clientes, log]);
+
+  const delAtividade = useCallback(async (id: string) => {
+    await dbDelAtividade(id);
+    log('excluir', 'atividade', id);
+    update(s => ({ ...s, atividades: s.atividades.filter(a => a.id !== id) }));
+  }, [update, log]);
+
+  const setAtividadeStatus = useCallback(async (id: string, status: string, motivo = '') => {
+    await dbSetAtividadeStatus(id, status, motivo);
+    log('status', 'atividade', id, `→ ${status}${motivo ? ': ' + motivo : ''}`);
+    update(s => ({ ...s, atividades: s.atividades.map(a => a.id === id ? { ...a, status, motivo } : a) }));
+  }, [update, log]);
+
   // ── OCORRÊNCIAS ──────────────────────────
   const setOcorrencia = useCallback(async (agendaId: string, date: string, status: 'ocorreu' | 'nao', motivo = '') => {
     await dbSetOcorrencia(agendaId, date, status, motivo);
@@ -290,6 +337,27 @@ export function useStore() {
     window.location.href = '/login';
   }, [log, userId]);
 
+  // ── TICKETS ──────────────────────────────
+  const addTicket = useCallback(async (data: Omit<Ticket, 'id' | 'ownerId' | 'criadoEm'>) => {
+    if (!userId) return;
+    const ticket: Ticket = { ...data, id: uid(), ownerId: userId, criadoEm: new Date().toISOString() };
+    await dbAddTicket(ticket, userId);
+    log('criar', 'ticket', ticket.id, `${data.nome}${data.numero ? ' #' + data.numero : ''}`);
+    update(s => ({ ...s, tickets: [...s.tickets, ticket] }));
+  }, [update, userId, log]);
+
+  const delTicket = useCallback(async (id: string) => {
+    const t = state.tickets.find(t => t.id === id);
+    await dbDelTicket(id);
+    log('excluir', 'ticket', id, t?.nome || '');
+    update(s => ({ ...s, tickets: s.tickets.filter(t => t.id !== id) }));
+  }, [update, state.tickets, log]);
+
+  const updateTicket = useCallback(async (id: string, changes: Partial<Omit<Ticket, 'id' | 'ownerId' | 'criadoEm'>>) => {
+    await dbUpdateTicket(id, changes);
+    update(s => ({ ...s, tickets: s.tickets.map(t => t.id === id ? { ...t, ...changes } : t) }));
+  }, [update]);
+
   return {
     state, loading, error,
     userId, userEmail, userNome, userAvatar, userRole, globalView,
@@ -302,7 +370,10 @@ export function useStore() {
     addAgendaExtra, delAgendaExtra, setAgendaExtraStatus,
     addScan, delScan, setScanStatus,
     addRecheck, delRecheck, setRechekStatus,
+    addPrem, delPrem, setPremStatus,
+    addAtividade, delAtividade, setAtividadeStatus,
     setOcorrencia, randomColor, logout,
+    addTicket, delTicket, updateTicket,
   };
 }
 

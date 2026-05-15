@@ -17,8 +17,9 @@ export default function DashboardAnalitico({ store }: Props) {
   const pend   = tarefas.filter(t => t.status === 'pendente').length;
   const anda   = tarefas.filter(t => t.status === 'andamento').length;
   const conc   = tarefas.filter(t => t.status === 'concluida').length;
-  const late   = tarefas.filter(t => isLate(t.prazo) && t.status !== 'concluida').length;
-  const taxaConclusao = total ? Math.round(conc / total * 100) : 0;
+  const fin    = tarefas.filter(t => t.status === 'finalizado').length;
+  const late   = tarefas.filter(t => isLate(t.prazo) && t.status !== 'concluida' && t.status !== 'finalizado').length;
+  const taxaConclusao = total ? Math.round((conc + fin) / total * 100) : 0;
 
   // Duração total de extras (em minutos)
   const totalMinutos = agendasExtras.reduce((acc, e) => {
@@ -33,9 +34,9 @@ export default function DashboardAnalitico({ store }: Props) {
   const ranking = clientes
     .map(c => {
       const ts    = tarefas.filter(t => t.clienteId === c.id);
-      const abertas = ts.filter(t => t.status !== 'concluida' && t.status !== 'cancelada').length;
-      const atrasadas = ts.filter(t => isLate(t.prazo) && t.status !== 'concluida').length;
-      const concluidas = ts.filter(t => t.status === 'concluida').length;
+      const abertas = ts.filter(t => t.status !== 'finalizado' && t.status !== 'cancelada').length;
+      const atrasadas = ts.filter(t => isLate(t.prazo) && t.status !== 'concluida' && t.status !== 'finalizado').length;
+      const concluidas = ts.filter(t => t.status === 'concluida' || t.status === 'finalizado').length;
       const pct = ts.length ? Math.round(concluidas / ts.length * 100) : 0;
       return { c, total: ts.length, abertas, atrasadas, concluidas, pct };
     })
@@ -47,6 +48,7 @@ export default function DashboardAnalitico({ store }: Props) {
     { label: 'Pendente',     value: pend, color: 'var(--warn)'    },
     { label: 'Em andamento', value: anda, color: 'var(--cyan)'    },
     { label: 'Concluída',    value: conc, color: 'var(--success)' },
+    { label: 'Finalizado',   value: fin,  color: 'var(--muted)'   },
   ].filter(s => s.value > 0);
 
   const maxBar = Math.max(...statusData.map(s => s.value), 1);

@@ -13,8 +13,8 @@ export default function Dashboard({ store, showToast }: Props) {
   const { state, cycleStatus } = store;
   const { tarefas, clientes } = state;
 
-  const pend  = tarefas.filter(t => t.status !== 'concluida' && t.status !== 'cancelada');
-  const late  = pend.filter(t => isLate(t.prazo));
+  const pend  = tarefas.filter(t => t.status !== 'finalizado' && t.status !== 'cancelada');
+  const late  = pend.filter(t => isLate(t.prazo) && t.status !== 'concluida');
   const anda  = tarefas.filter(t => t.status === 'andamento');
   const conc  = tarefas.filter(t => t.status === 'concluida');
 
@@ -61,7 +61,7 @@ export default function Dashboard({ store, showToast }: Props) {
             {ss.map(s => {
               const c = clientes.find(x => x.id === s.clienteId);
               if (!c) return null;
-              const pTasks = tarefas.filter(t => t.clienteId === c.id && t.status !== 'concluida' && t.status !== 'cancelada');
+              const pTasks = tarefas.filter(t => t.clienteId === c.id && t.status !== 'finalizado' && t.status !== 'cancelada');
               const atrs   = pTasks.filter(t => isLate(t.prazo));
               return (
                 <div key={s.agendaId} style={{

@@ -180,11 +180,19 @@ export default function Clientes({ store, showToast }: Props) {
           {state.clientes.length === 0 && <div style={{ textAlign: 'center', padding: 30, color: 'var(--muted)', fontSize: 12 }}>Nenhum cliente. Adicione pelo painel ao lado.</div>}
 
           {state.clientes.map(c => {
-            const ts   = state.tarefas.filter(t => t.clienteId === c.id);
-            const pend = ts.filter(t => t.status !== 'concluida' && t.status !== 'cancelada');
-            const conc = ts.filter(t => t.status === 'concluida');
-            const late = pend.filter(t => isLate(t.prazo));
-            const pct  = ts.length ? Math.round(conc.length / ts.length * 100) : 0;
+            const ts      = state.tarefas.filter(t => t.clienteId === c.id);
+            const tAtivas = ts.filter(t => t.status !== 'cancelada');
+            const tPend   = tAtivas.filter(t => t.status === 'pendente');
+            const tAnda   = tAtivas.filter(t => t.status === 'andamento');
+            const tConc   = tAtivas.filter(t => t.status === 'concluida');
+            const tFinal  = tAtivas.filter(t => t.status === 'finalizado');
+            const pend    = ts.filter(t => t.status !== 'finalizado' && t.status !== 'cancelada');
+            const late    = pend.filter(t => isLate(t.prazo));
+            const total   = tAtivas.length;
+            const pctP    = total ? Math.round(tPend.length  / total * 100) : 0;
+            const pctA    = total ? Math.round(tAnda.length  / total * 100) : 0;
+            const pctC    = total ? Math.round(tConc.length  / total * 100) : 0;
+            const pctF    = total ? Math.round(tFinal.length / total * 100) : 0;
             const open = expanded[c.id];
 
             return (
@@ -196,14 +204,23 @@ export default function Clientes({ store, showToast }: Props) {
                   <div style={{ width: 36, height: 36, borderRadius: 6, background: c.cor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 15, color: 'white', flexShrink: 0 }}>{c.nome.charAt(0)}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text)' }}>{c.nome}</div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{ts.length} tarefa{ts.length !== 1 ? 's' : ''} · {pct}%</div>
-                    <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, marginTop: 5 }}>
-                      <div style={{ height: '100%', borderRadius: 2, background: c.cor, width: `${pct}%`, transition: 'width .5s' }} />
+                    <div style={{ display: 'flex', gap: 10, marginTop: 3, fontSize: 10, color: 'var(--muted)' }}>
+                      {tPend.length  > 0 && <span style={{ color: 'var(--warn)' }}   >● {pctP}% pendente</span>}
+                      {tAnda.length  > 0 && <span style={{ color: 'var(--cyan-dim)' }}>● {pctA}% andamento</span>}
+                      {tConc.length  > 0 && <span style={{ color: 'var(--success)' }}>● {pctC}% concluído</span>}
+                      {tFinal.length > 0 && <span>● {pctF}% finalizado</span>}
+                      {total === 0 && <span>{ts.length} tarefa{ts.length !== 1 ? 's' : ''}</span>}
+                    </div>
+                    <div style={{ display: 'flex', height: 4, borderRadius: 2, marginTop: 5, overflow: 'hidden', background: 'var(--border)' }}>
+                      <div style={{ width: `${pctP}%`, background: 'var(--warn)',    transition: 'width .5s' }} />
+                      <div style={{ width: `${pctA}%`, background: 'var(--cyan)',    transition: 'width .5s' }} />
+                      <div style={{ width: `${pctC}%`, background: 'var(--success)', transition: 'width .5s' }} />
+                      <div style={{ width: `${pctF}%`, background: 'var(--muted)',   transition: 'width .5s' }} />
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
                     {late.length > 0 && <span className="badge b-late">⚠{late.length}</span>}
-                    {pend.length > 0 ? <span className="badge b-pend">{pend.length}</span> : ts.length > 0 ? <span className="badge b-ok">✓</span> : null}
+                    {pend.length > 0 ? <span className="badge b-pend">{pend.length}</span> : total > 0 ? <span className="badge b-ok">✓</span> : null}
                   </div>
                   <span style={{ fontSize: 10, color: 'var(--muted)', transition: 'transform .2s', transform: open ? 'rotate(180deg)' : 'none' }}>▼</span>
                 </div>
@@ -213,18 +230,20 @@ export default function Clientes({ store, showToast }: Props) {
                     {ts.length === 0 && <div style={{ padding: 14, textAlign: 'center', color: 'var(--muted)', fontSize: 12, fontStyle: 'italic' }}>Nenhuma tarefa ainda</div>}
 
                     {ts.map(t => {
-                      const isLateT = isLate(t.prazo) && t.status !== 'concluida';
-                      const hasC    = t.comentarios.length > 0;
-                      const files   = cmntFiles[t.id] || [];
-                      const loading = cmntLoading[t.id];
+                      const isLateT  = isLate(t.prazo) && t.status !== 'concluida' && t.status !== 'finalizado';
+                      const isFinal  = t.status === 'finalizado';
+                      const isConc   = t.status === 'concluida';
+                      const hasC     = t.comentarios.length > 0;
+                      const files    = cmntFiles[t.id] || [];
+                      const loading  = cmntLoading[t.id];
                       return (
-                        <div key={t.id} style={{ background: 'var(--ivory2)', borderBottom: '1px solid var(--border)', opacity: t.status === 'concluida' ? .5 : 1 }}>
+                        <div key={t.id} style={{ background: 'var(--ivory2)', borderBottom: '1px solid var(--border)', opacity: isFinal ? .45 : 1 }}>
                           <div style={{ padding: '10px 16px 10px 20px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                             <div onClick={() => { if (!isViewer) { toggleConcluida(t.id); showToast(t.status === 'concluida' ? 'Reaberta' : 'Concluída ✓'); } }}
-                              style={{ width: 18, height: 18, border: `2px solid ${t.status === 'concluida' ? 'var(--success)' : 'var(--border)'}`, borderRadius: 4, flexShrink: 0, cursor: isViewer ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, marginTop: 2, background: t.status === 'concluida' ? 'var(--success)' : 'white', color: 'white' }}
-                            >{t.status === 'concluida' ? '✓' : ''}</div>
+                              style={{ width: 18, height: 18, border: `2px solid ${isConc || isFinal ? 'var(--success)' : 'var(--border)'}`, borderRadius: 4, flexShrink: 0, cursor: isViewer ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, marginTop: 2, background: isConc || isFinal ? 'var(--success)' : 'white', color: 'white' }}
+                            >{isConc || isFinal ? '✓' : ''}</div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, lineHeight: 1.5, color: t.status === 'concluida' ? 'var(--muted)' : 'var(--text)', textDecoration: t.status === 'concluida' ? 'line-through' : 'none' }}>{t.desc}</div>
+                              <div style={{ fontSize: 13, lineHeight: 1.5, color: isFinal ? 'var(--muted)' : 'var(--text)', textDecoration: isFinal ? 'line-through' : 'none' }}>{t.desc}</div>
                               <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 5, flexWrap: 'wrap' }}>
                                 {t.prazo && <span style={{ fontSize: 11, color: isLateT ? 'var(--danger)' : 'var(--muted)', fontWeight: isLateT ? 600 : 400 }}>{isLateT ? '⚠ ' : ''}{fmtBR(t.prazo)}</span>}
                                 <button className={`spill sp-${t.status}`} onClick={() => { if (!isViewer) cycleStatus(t.id); }} style={{ cursor: isViewer ? 'default' : 'pointer' }}>{labelStatus(t.status)}</button>

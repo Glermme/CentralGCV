@@ -4,8 +4,8 @@
 
 import { supabase } from '@/lib/supabase';
 import type {
-  AppState, Cliente, Tarefa, Reuniao,
-  AgendaRecorrente, AgendaExtra, Comentario, Scan, Recheck,
+  AppState, Cliente, Tarefa, Reuniao, Ticket,
+  AgendaRecorrente, AgendaExtra, Comentario, Scan, Recheck, Prem, Atividade,
 } from '@/lib/store';
 
 // ── LOGS ───────────────────────────────────
@@ -38,7 +38,8 @@ function mapState(
   clientes: any[], reunioes: any[], tarefas: any[],
   comentariosRaw: any[], agendas: any[], ocorrencias: any[],
   extras: any[], perfis: any[], anexos: any[],
-  scans: any[], scanOcorrencias: any[], recheks: any[]
+  scans: any[], scanOcorrencias: any[], recheks: any[],
+  prems: any[], atividades: any[], tickets: any[]
 ): AppState {
   const perfilMap: Record<string, { nome: string; avatar: string }> = {};
   perfis.forEach((p: any) => {
@@ -78,12 +79,20 @@ function mapState(
     clientes: (clientes || []).map((c: any): Cliente => ({ id: c.id, nome: c.nome, empresa: c.empresa, cor: c.cor })),
     reunioes: (reunioes || []).map((r: any): Reuniao => ({ id: r.id, data: r.data, obs: r.obs })),
     tarefas: tarefasComComentarios,
-    agendas: (agendas || []).map((a: any): AgendaRecorrente => ({ id: a.id, clienteId: a.cliente_id, ocorrencia: a.ocorrencia, diaSemana: a.dia_semana, hora: a.hora, obs: a.obs })),
+    agendas: (agendas || []).map((a: any): AgendaRecorrente => ({ id: a.id, clienteId: a.cliente_id, ocorrencia: a.ocorrencia, diaSemana: a.dia_semana, hora: a.hora, obs: a.obs, criadoEm: a.criado_em || '' })),
     agendasExtras: (extras || []).map((e: any) => ({ id: e.id, clienteId: e.cliente_id, ownerId: e.owner_id, data: e.data, hora: e.hora, duracao: e.duracao, descricao: e.descricao, status: e.status, motivo: e.motivo, criadoEm: e.criado_em })),
-    scans: (scans || []).map((s: any): Scan => ({ id: s.id, clienteId: s.cliente_id, ocorrencia: s.ocorrencia, diaSemana: s.dia_semana, hora: s.hora, obs: s.obs })),
-    recheks: (recheks || []).map((r: any): Recheck => ({ id: r.id, clienteId: r.cliente_id, ownerId: r.owner_id, data: r.data, hora: r.hora, duracao: r.duracao, descricao: r.descricao, status: r.status, motivo: r.motivo, criadoEm: r.criado_em })),
+    scans: (scans || []).map((s: any): Scan => ({ id: s.id, clienteId: s.cliente_id, ocorrencia: s.ocorrencia, diaSemana: s.dia_semana, hora: s.hora, obs: s.obs, criadoEm: s.criado_em || '' })),
+    recheks:    (recheks    || []).map((r: any): Recheck    => ({ id: r.id, clienteId: r.cliente_id, ownerId: r.owner_id, data: r.data, hora: r.hora, duracao: r.duracao, descricao: r.descricao, status: r.status, motivo: r.motivo, criadoEm: r.criado_em })),
+    prems:      (prems      || []).map((p: any): Prem      => ({ id: p.id, clienteId: p.cliente_id, ownerId: p.owner_id, data: p.data, hora: p.hora, duracao: p.duracao, descricao: p.descricao, status: p.status, motivo: p.motivo, criadoEm: p.criado_em })),
+    atividades: (atividades || []).map((a: any): Atividade => ({ id: a.id, clienteId: a.cliente_id, ownerId: a.owner_id, data: a.data, hora: a.hora, duracao: a.duracao, descricao: a.descricao, status: a.status, motivo: a.motivo, criadoEm: a.criado_em })),
     scanOcorrencias: scanOcorrenciasMap,
     ocorrencias: ocorrenciasMap,
+    tickets: (tickets || []).map((t: any): Ticket => ({
+      id: t.id, clienteId: t.cliente_id, ownerId: t.owner_id,
+      nome: t.nome, numero: t.numero || '', descricao: t.descricao || '',
+      criadoEm: t.criado_em, previsaoConclusao: t.previsao_conclusao || '',
+      prazo: t.prazo || '', status: t.status,
+    })),
     colorIdx: 0,
   };
 }
@@ -96,6 +105,7 @@ export async function loadFromDB(): Promise<AppState> {
     { data: comentariosRaw }, { data: agendas }, { data: ocorrencias },
     { data: extras }, { data: perfis }, { data: anexos },
     { data: scans }, { data: scanOcorrencias }, { data: recheks },
+    { data: prems }, { data: atividades },
   ] = await Promise.all([
     supabase.from('clientes').select('*').order('criado_em'),
     supabase.from('reunioes').select('*').order('criado_em'),
@@ -109,9 +119,14 @@ export async function loadFromDB(): Promise<AppState> {
     supabase.from('scans').select('*').order('criado_em'),
     supabase.from('scan_ocorrencias').select('*'),
     supabase.from('recheks').select('*').order('data').order('hora'),
+    supabase.from('prems').select('*').order('data').order('hora'),
+    supabase.from('atividades').select('*').order('data').order('hora'),
   ]);
 
-  return mapState(clientes||[], reunioes||[], tarefas||[], comentariosRaw||[], agendas||[], ocorrencias||[], extras||[], perfis||[], anexos||[], scans||[], scanOcorrencias||[], recheks||[]);
+  let tickets: any[] = [];
+  try { const { data: td } = await supabase.from('tickets').select('*').order('criado_em'); tickets = td || []; } catch { /* tabela ainda não existe */ }
+
+  return mapState(clientes||[], reunioes||[], tarefas||[], comentariosRaw||[], agendas||[], ocorrencias||[], extras||[], perfis||[], anexos||[], scans||[], scanOcorrencias||[], recheks||[], prems||[], atividades||[], tickets||[]);
 }
 
 export async function loadAllFromDB(): Promise<AppState> { return loadFromDB(); }
@@ -218,7 +233,53 @@ export async function dbSetRechekStatus(id: string, status: string, motivo: stri
   await supabase.from('recheks').update({ status, motivo }).eq('id', id);
 }
 
+// ── PREMS ──────────────────────────────────
+export async function dbAddPrem(p: Prem, ownerId: string) {
+  await supabase.from('prems').insert({ id: p.id, cliente_id: p.clienteId, owner_id: ownerId, data: p.data, hora: p.hora, duracao: p.duracao, descricao: p.descricao, status: '', motivo: '' });
+}
+export async function dbDelPrem(id: string) {
+  await supabase.from('prems').delete().eq('id', id);
+}
+export async function dbSetPremStatus(id: string, status: string, motivo: string) {
+  await supabase.from('prems').update({ status, motivo }).eq('id', id);
+}
+
+// ── ATIVIDADES ─────────────────────────────
+export async function dbAddAtividade(a: Atividade, ownerId: string) {
+  await supabase.from('atividades').insert({ id: a.id, cliente_id: a.clienteId, owner_id: ownerId, data: a.data, hora: a.hora, duracao: a.duracao, descricao: a.descricao, status: '', motivo: '' });
+}
+export async function dbDelAtividade(id: string) {
+  await supabase.from('atividades').delete().eq('id', id);
+}
+export async function dbSetAtividadeStatus(id: string, status: string, motivo: string) {
+  await supabase.from('atividades').update({ status, motivo }).eq('id', id);
+}
+
 // ── OCORRÊNCIAS ────────────────────────────
 export async function dbSetOcorrencia(agendaId: string, data: string, status: string, motivo: string) {
   await supabase.from('ocorrencias').upsert({ agenda_id: agendaId, data, status, motivo }, { onConflict: 'agenda_id,data' });
+}
+
+// ── TICKETS ────────────────────────────────
+export async function dbAddTicket(t: Ticket, ownerId: string) {
+  await supabase.from('tickets').insert({
+    id: t.id, cliente_id: t.clienteId, owner_id: ownerId,
+    nome: t.nome, numero: t.numero, descricao: t.descricao,
+    previsao_conclusao: t.previsaoConclusao || null, prazo: t.prazo || null,
+    status: t.status,
+  });
+}
+export async function dbDelTicket(id: string) {
+  await supabase.from('tickets').delete().eq('id', id);
+}
+export async function dbUpdateTicket(id: string, changes: Partial<Omit<Ticket, 'id' | 'ownerId' | 'criadoEm'>>) {
+  const payload: Record<string, any> = {};
+  if (changes.nome               !== undefined) payload.nome                = changes.nome;
+  if (changes.numero             !== undefined) payload.numero              = changes.numero;
+  if (changes.descricao          !== undefined) payload.descricao           = changes.descricao;
+  if (changes.clienteId          !== undefined) payload.cliente_id          = changes.clienteId;
+  if (changes.previsaoConclusao  !== undefined) payload.previsao_conclusao  = changes.previsaoConclusao || null;
+  if (changes.prazo              !== undefined) payload.prazo               = changes.prazo || null;
+  if (changes.status             !== undefined) payload.status              = changes.status;
+  await supabase.from('tickets').update(payload).eq('id', id);
 }

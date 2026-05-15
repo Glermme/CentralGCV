@@ -70,7 +70,7 @@ export function buildRelatorioData(
   clienteIds.forEach(cid => {
     if (filtroClienteIds.length > 0 && !filtroClienteIds.includes(cid)) return;
     const c = state.clientes.find(x => x.id === cid); if (!c) return;
-    const abertas = state.tarefas.filter(t => t.clienteId === cid && t.status !== 'concluida' && t.status !== 'cancelada');
+    const abertas = state.tarefas.filter(t => t.clienteId === cid && t.status !== 'finalizado' && t.status !== 'cancelada');
     if (!abertas.length) return;
     totalTarefas += abertas.length;
     abertas.forEach(t => { totalComentarios += t.comentarios.length; });
@@ -91,7 +91,7 @@ export function buildRelatorioData(
   return { clientes, semana: label, geradoEm, totalTarefas, totalComentarios };
 }
 
-const ST_LABEL: Record<string, string> = { pendente: 'Pendente', andamento: 'Em andamento' };
+const ST_LABEL: Record<string, string> = { pendente: 'Pendente', andamento: 'Em andamento', concluida: 'Concluída' };
 
 export function gerarHTMLRelatorio(
   state: AppState, de: Date, ate: Date,
@@ -112,7 +112,8 @@ export function gerarHTMLRelatorio(
               </div>
             </div>`).join('')}</div>`
         : `<div class="no-cmnt">Sem comentários registrados</div>`;
-      return `<div class="ti"><div class="ti-h"><div class="dot" style="background:${c.cor}"></div><div class="ti-desc">${t.desc}</div><span class="st ${t.status === 'andamento' ? 'st-a' : 'st-p'}">${ST_LABEL[t.status] || t.status}</span></div>${cHTML}</div>`;
+      const stClass = t.status === 'andamento' ? 'st-a' : t.status === 'concluida' ? 'st-c' : 'st-p';
+      return `<div class="ti"><div class="ti-h"><div class="dot" style="background:${c.cor}"></div><div class="ti-desc">${t.desc}</div><span class="st ${stClass}">${ST_LABEL[t.status] || t.status}</span></div>${cHTML}</div>`;
     }).join('');
 
     return `<div class="cb">
@@ -172,6 +173,7 @@ html,body{width:794px;max-width:794px;overflow-x:hidden;margin:0;padding:0;font-
 .st{font-size:9px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;padding:2px 7px;border-radius:3px;flex-shrink:0;}
 .st-p{background:rgba(232,131,10,.15)!important;color:#c06800!important;}
 .st-a{background:rgba(13,219,255,.12)!important;color:#0ab8d8!important;border:1px solid rgba(13,219,255,.25);}
+.st-c{background:rgba(42,170,90,.12)!important;color:#1a7a3f!important;}
 .cw{margin-left:17px;padding-left:14px;border-left:2px solid #d8dbc8;}
 .ci{padding:7px 0;border-bottom:1px dashed #d8dbc8;display:flex;gap:10px;align-items:flex-start;}
 .ci:last-child{border-bottom:none;}

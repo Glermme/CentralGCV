@@ -30,7 +30,7 @@ export interface Tarefa {
   clienteId:   string;
   desc:        string;
   prazo:       string;
-  status:      'pendente' | 'andamento' | 'concluida' | 'cancelada';
+  status:      'pendente' | 'andamento' | 'concluida' | 'finalizado' | 'cancelada';
   reuniaoId:   string | null;
   criadaEm:    string;
   comentarios: Comentario[];
@@ -49,6 +49,7 @@ export interface AgendaRecorrente {
   diaSemana:  1 | 2 | 3 | 4 | 5;
   hora:       string;
   obs:        string;
+  criadoEm:   string; // ISO datetime — slots só existem a partir desta data
 }
 
 export interface AgendaExtra {
@@ -84,6 +85,7 @@ export interface Scan {
   diaSemana:  1 | 2 | 3 | 4 | 5 | 6 | 7; // 6=Sáb, 7=Dom
   hora:       string;
   obs:        string;
+  criadoEm:   string; // ISO datetime — slots só existem a partir desta data
 }
 
 export interface ScanOcorrencia {
@@ -96,17 +98,46 @@ export interface OcorrenciaStatus {
   motivo: string;
 }
 
+export interface Prem {
+  id:        string;
+  clienteId: string;
+  ownerId:   string;
+  data:      string;
+  hora:      string;
+  duracao:   string;
+  descricao: string;
+  status:    string;
+  motivo:    string;
+  criadoEm:  string;
+}
+
+export interface Atividade {
+  id:        string;
+  clienteId: string;
+  ownerId:   string;
+  data:      string;
+  hora:      string;
+  duracao:   string;
+  descricao: string;
+  status:    string;
+  motivo:    string;
+  criadoEm:  string;
+}
+
 export interface AppState {
-  clientes:       Cliente[];
-  tarefas:        Tarefa[];
-  reunioes:       Reuniao[];
-  agendas:        AgendaRecorrente[];
-  agendasExtras:  AgendaExtra[];
-  recheks:        Recheck[];
-  scans:          Scan[];
+  clientes:        Cliente[];
+  tarefas:         Tarefa[];
+  reunioes:        Reuniao[];
+  agendas:         AgendaRecorrente[];
+  agendasExtras:   AgendaExtra[];
+  recheks:         Recheck[];
+  prems:           Prem[];
+  atividades:      Atividade[];
+  scans:           Scan[];
   scanOcorrencias: Record<string, ScanOcorrencia>; // key: scanId_data
-  ocorrencias:    Record<string, OcorrenciaStatus>;
-  colorIdx:       number;
+  ocorrencias:     Record<string, OcorrenciaStatus>;
+  tickets:         Ticket[];
+  colorIdx:        number;
 }
 
 export const COLORS = [
@@ -152,7 +183,20 @@ export function isLate(prazo: string): boolean {
 }
 
 export function labelStatus(s: Tarefa['status']): string {
-  return { pendente: 'Pendente', andamento: 'Em andamento', concluida: 'Concluída', cancelada: 'Cancelada' }[s] ?? s;
+  return { pendente: 'Pendente', andamento: 'Em andamento', concluida: 'Concluída', finalizado: 'Finalizado', cancelada: 'Cancelada' }[s] ?? s;
+}
+
+export interface Ticket {
+  id:                 string;
+  clienteId:          string;
+  ownerId:            string;
+  nome:               string;
+  numero:             string;
+  descricao:          string;
+  criadoEm:           string;
+  previsaoConclusao:  string;
+  prazo:              string;
+  status:             'aberto' | 'em_atendimento' | 'resolvido' | 'fechado';
 }
 
 export function proxTerca(): Date {
@@ -175,9 +219,9 @@ export function hslToHex(h: number, s: number, l: number): string {
 export function buildDemoState(): AppState {
   return {
     clientes: [], tarefas: [], reunioes: [],
-    agendas: [], agendasExtras: [], recheks: [],
+    agendas: [], agendasExtras: [], recheks: [], prems: [], atividades: [],
     scans: [], scanOcorrencias: {},
-    ocorrencias: {}, colorIdx: 0,
+    ocorrencias: {}, tickets: [], colorIdx: 0,
   };
 }
 
@@ -190,9 +234,12 @@ export function loadState(): AppState {
     if (!parsed.agendas)          parsed.agendas          = [];
     if (!parsed.agendasExtras)    parsed.agendasExtras    = [];
     if (!parsed.recheks)          parsed.recheks          = [];
+    if (!parsed.prems)            parsed.prems            = [];
+    if (!parsed.atividades)       parsed.atividades       = [];
     if (!parsed.scans)            parsed.scans            = [];
     if (!parsed.scanOcorrencias)  parsed.scanOcorrencias  = {};
     if (!parsed.ocorrencias)      parsed.ocorrencias      = {};
+    if (!parsed.tickets)          parsed.tickets          = [];
     parsed.tarefas.forEach(t => {
       if (!t.comentarios) t.comentarios = [];
       t.comentarios.forEach(c => {

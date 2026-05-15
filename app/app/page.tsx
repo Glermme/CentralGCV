@@ -9,6 +9,7 @@ import DashboardAnalitico from '@/components/DashboardAnalitico';
 import Clientes           from '@/components/Clientes';
 import Kanban             from '@/components/Kanban';
 import Agenda             from '@/components/Agenda';
+import Tickets            from '@/components/Tickets';
 import Historico          from '@/components/Historico';
 import Usuarios           from '@/components/Usuarios';
 import Logs               from '@/components/Logs';
@@ -18,7 +19,7 @@ import ModalReuniao   from '@/components/modals/ModalReuniao';
 import ModalExport    from '@/components/modals/ModalExport';
 import ModalRelatorio from '@/components/modals/ModalRelatorio';
 
-type ViewName = 'geral' | 'dashboard' | 'clientes' | 'kanban' | 'agenda' | 'historico' | 'usuarios' | 'logs';
+type ViewName = 'geral' | 'dashboard' | 'clientes' | 'kanban' | 'agenda' | 'tickets' | 'historico' | 'usuarios' | 'logs';
 
 export default function Home() {
   const store = useStore();
@@ -55,6 +56,7 @@ export default function Home() {
     { id: 'clientes'  as ViewName, label: 'Clientes'      },
     { id: 'kanban'    as ViewName, label: 'Kanban'         },
     { id: 'agenda'    as ViewName, label: 'Agenda & Scans' },
+    { id: 'tickets'   as ViewName, label: 'Tickets'       },
     { id: 'historico' as ViewName, label: 'Histórico'     },
     ...(isAdmin ? [
       { id: 'usuarios' as ViewName, label: 'Usuários' },
@@ -140,6 +142,7 @@ export default function Home() {
           {view === 'clientes'  && <Clientes           store={store} showToast={showToast} />}
           {view === 'kanban'    && <Kanban             store={store} showToast={showToast} />}
           {view === 'agenda'    && <Agenda             store={store} showToast={showToast} />}
+          {view === 'tickets'   && <Tickets            store={store} showToast={showToast} />}
           {view === 'historico' && <Historico          store={store} showToast={showToast} />}
           {view === 'usuarios'  && isAdmin && <Usuarios store={store} showToast={showToast} />}
           {view === 'logs'      && isAdmin && <Logs showToast={showToast} />}
